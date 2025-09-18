@@ -1,0 +1,133 @@
+{
+  "services": {
+    "supabase-db": {
+      "source": {
+        "image": "supabase/postgres:15.8.1.060"
+      },
+      "variables": {
+        "POSTGRES_PASSWORD": "${{POSTGRES_PASSWORD}}",
+        "POSTGRES_DB": "postgres",
+        "POSTGRES_PORT": "5432",
+        "JWT_SECRET": "${{JWT_SECRET}}",
+        "JWT_EXP": "3600"
+      },
+      "volumes": [
+        {
+          "mountPath": "/var/lib/postgresql/data",
+          "name": "postgres-data"
+        },
+        {
+          "mountPath": "/docker-entrypoint-initdb.d/init-schema.sql",
+          "name": "init-schema"
+        }
+      ]
+    },
+    "supabase-studio": {
+      "source": {
+        "image": "supabase/studio:2025.06.30-sha-6f5982d"
+      },
+      "variables": {
+        "SUPABASE_URL": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+        "SUPABASE_PUBLIC_URL": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+        "SUPABASE_ANON_KEY": "${{ANON_KEY}}",
+        "SUPABASE_SERVICE_KEY": "${{SERVICE_ROLE_KEY}}",
+        "POSTGRES_PASSWORD": "${{POSTGRES_PASSWORD}}",
+        "STUDIO_PG_META_URL": "http://supabase-meta:8080",
+        "DEFAULT_ORGANIZATION_NAME": "Railway Organization",
+        "DEFAULT_PROJECT_NAME": "Exploring.fyi"
+      },
+      "domains": [
+        {
+          "domain": "${{RAILWAY_PUBLIC_DOMAIN}}"
+        }
+      ]
+    },
+    "supabase-kong": {
+      "source": {
+        "image": "kong:2.8.1"
+      },
+      "variables": {
+        "KONG_DATABASE": "off",
+        "KONG_DECLARATIVE_CONFIG": "/home/kong/kong.yml",
+        "KONG_DNS_ORDER": "LAST,A,CNAME",
+        "KONG_PLUGINS": "request-transformer,cors,key-auth,acl,basic-auth",
+        "SUPABASE_ANON_KEY": "${{ANON_KEY}}",
+        "SUPABASE_SERVICE_KEY": "${{SERVICE_ROLE_KEY}}"
+      }
+    },
+    "supabase-auth": {
+      "source": {
+        "image": "supabase/gotrue:v2.177.0"
+      },
+      "variables": {
+        "GOTRUE_API_HOST": "0.0.0.0",
+        "GOTRUE_API_PORT": "9999",
+        "GOTRUE_DB_DRIVER": "postgres",
+        "GOTRUE_DB_DATABASE_URL": "postgres://supabase_auth_admin:${{POSTGRES_PASSWORD}}@supabase-db:5432/postgres",
+        "GOTRUE_SITE_URL": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+        "GOTRUE_JWT_SECRET": "${{JWT_SECRET}}",
+        "GOTRUE_JWT_EXP": "3600",
+        "GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED": "true",
+        "API_EXTERNAL_URL": "https://${{RAILWAY_PUBLIC_DOMAIN}}"
+      }
+    },
+    "supabase-rest": {
+      "source": {
+        "image": "postgrest/postgrest:v12.2.12"
+      },
+      "variables": {
+        "PGRST_DB_URI": "postgres://authenticator:${{POSTGRES_PASSWORD}}@supabase-db:5432/postgres",
+        "PGRST_DB_SCHEMAS": "public,storage,graphql_public",
+        "PGRST_DB_ANON_ROLE": "anon",
+        "PGRST_JWT_SECRET": "${{JWT_SECRET}}"
+      }
+    },
+    "supabase-realtime": {
+      "source": {
+        "image": "supabase/realtime:v2.34.47"
+      },
+      "variables": {
+        "PORT": "4000",
+        "DB_HOST": "supabase-db",
+        "DB_PORT": "5432",
+        "DB_USER": "supabase_admin",
+        "DB_PASSWORD": "${{POSTGRES_PASSWORD}}",
+        "DB_NAME": "postgres",
+        "API_JWT_SECRET": "${{JWT_SECRET}}",
+        "SECRET_KEY_BASE": "${{SECRET_KEY_BASE}}"
+      }
+    },
+    "supabase-storage": {
+      "source": {
+        "image": "supabase/storage-api:v1.25.7"
+      },
+      "variables": {
+        "ANON_KEY": "${{ANON_KEY}}",
+        "SERVICE_KEY": "${{SERVICE_ROLE_KEY}}",
+        "DATABASE_URL": "postgres://supabase_storage_admin:${{POSTGRES_PASSWORD}}@supabase-db:5432/postgres",
+        "PGRST_JWT_SECRET": "${{JWT_SECRET}}",
+        "STORAGE_BACKEND": "file",
+        "FILE_STORAGE_BACKEND_PATH": "/var/lib/storage"
+      },
+      "volumes": [
+        {
+          "mountPath": "/var/lib/storage",
+          "name": "storage-data"
+        }
+      ]
+    },
+    "supabase-meta": {
+      "source": {
+        "image": "supabase/postgres-meta:v0.91.0"
+      },
+      "variables": {
+        "PG_META_PORT": "8080",
+        "PG_META_DB_HOST": "supabase-db",
+        "PG_META_DB_PORT": "5432",
+        "PG_META_DB_NAME": "postgres",
+        "PG_META_DB_USER": "supabase_admin",
+        "PG_META_DB_PASSWORD": "${{POSTGRES_PASSWORD}}"
+      }
+    }
+  }
+}

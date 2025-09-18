@@ -1,0 +1,22 @@
+# Ignore large volume data
+volumes/db/data/
+volumes/storage/
+*.log
+.env
+env-example
+temp-supabase/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Railway files
+railway.json
+
+# Docker files not needed in build
+docker-compose.yml
+docker-compose.railway.yml
