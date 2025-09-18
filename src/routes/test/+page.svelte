@@ -1,285 +1,488 @@
-<!-- AI Integration Test Page -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { CheckCircle, XCircle, AlertCircle, Database, Globe, Key, Server } from 'lucide-svelte';
 	
-	let testResults: any = null;
-	let isRunning = false;
-	let currentStep = '';
-	let errors: string[] = [];
+	// Test results state
+	let testResults = $state({
+		dbConnection: { status: 'pending' as const, message: '', details: null as any },
+		supabaseApi: { status: 'pending' as const, message: '', details: null as any },
+		authentication: { status: 'pending' as const, message: '', details: null as any },
+		tableAccess: { status: 'pending' as const, message: '', details: null as any },
+		sessionCreation: { status: 'pending' as const, message: '', details: null as any }
+	});
 
-	async function runAITest() {
-		console.log('🧪 [TEST] Starting AI integration test...');
+	let isRunning = $state(false);
+	let config = $state({
+		supabaseUrl: 'https://kong-production-413c.up.railway.app',
+		anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzU4MjE0NDU4LCJleHAiOjE3ODk3NTA0NTh9.WvzpYKisqN_40jS27rclKHHm2mGOKVB8o-goV_-DKxE',
+		postgresUrl: 'postgresql://supabase_admin:kam8nkm2lwhsz6rsudtv6q5a5zw3tmzyuxz9w7wszm4etd8gn0zcm4a22vfyhsdk@mainline.proxy.rlwy.net:36402/postgres'
+	});
+
+	async function runTests() {
 		isRunning = true;
-		errors = [];
-		testResults = null;
 		
+		// Reset all test results
+		testResults = {
+			dbConnection: { status: 'running', message: 'Testing...', details: null },
+			supabaseApi: { status: 'pending', message: '', details: null },
+			authentication: { status: 'pending', message: '', details: null },
+			tableAccess: { status: 'pending', message: '', details: null },
+			sessionCreation: { status: 'pending', message: '', details: null }
+		};
+
 		try {
-			// Test 1: Topic Analysis
-			currentStep = 'Testing topic analysis...';
-			console.log('📝 [TEST] Testing topic analysis...');
+			// Test 1: Direct Database Connection
+			await testDatabaseConnection();
 			
-			const topicResponse = await fetch('/api/analyze-topic', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ topic: 'Machine Learning' }),
-			});
+			// Test 2: Supabase API Availability
+			await testSupabaseApi();
 			
-			if (!topicResponse.ok) {
-				throw new Error(`Topic analysis failed: ${topicResponse.status} ${topicResponse.statusText}`);
-			}
+			// Test 3: Authentication
+			await testAuthentication();
 			
-			const topicResult = await topicResponse.json();
+			// Test 4: Table Access
+			await testTableAccess();
 			
-			if (!topicResult.success || !topicResult.data) {
-				throw new Error('Topic analysis returned invalid data');
-			}
-			
-			console.log('✅ [TEST] Topic analysis successful:', topicResult.data);
-
-			// Test 2: Mind Map Creation
-			currentStep = 'Testing mind map creation...';
-			console.log('🗺️ [TEST] Testing mind map creation...');
-			
-			const { createMindMapFromBreakdown } = await import('$lib/services/topicAnalysis.js');
-			const mindMap = createMindMapFromBreakdown(topicResult.data);
-			
-			if (!mindMap || !mindMap.nodes || !mindMap.edges) {
-				throw new Error('Mind map creation failed');
-			}
-			
-			console.log('✅ [TEST] Mind map creation successful:', {
-				nodeCount: mindMap.nodes.length,
-				edgeCount: mindMap.edges.length
-			});
-
-			// Test 3: Concept Expansion
-			currentStep = 'Testing concept expansion...';
-			console.log('🔍 [TEST] Testing concept expansion...');
-			
-			const firstConcept = topicResult.data.keyAspects[0];
-			const expansionResponse = await fetch('/api/expand-concept', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ 
-					concept: firstConcept.name, 
-					parentTopic: 'Machine Learning' 
-				}),
-			});
-			
-			if (!expansionResponse.ok) {
-				throw new Error(`Concept expansion failed: ${expansionResponse.status} ${expansionResponse.statusText}`);
-			}
-			
-			const expansionResult = await expansionResponse.json();
-			
-			if (!expansionResult.success || !expansionResult.data) {
-				throw new Error('Concept expansion returned invalid data');
-			}
-			
-			console.log('✅ [TEST] Concept expansion successful:', expansionResult.data);
-
-			// Test 4: URL Analysis
-			currentStep = 'Testing URL analysis...';
-			console.log('🌐 [TEST] Testing URL analysis...');
-			
-			const urlResponse = await fetch('/api/analyze-url', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ url: 'https://docs.python.org/3/tutorial/' }),
-			});
-			
-			if (!urlResponse.ok) {
-				throw new Error(`URL analysis failed: ${urlResponse.status} ${urlResponse.statusText}`);
-			}
-			
-			const urlResult = await urlResponse.json();
-			
-			if (!urlResult.success || !urlResult.data) {
-				throw new Error('URL analysis returned invalid data');
-			}
-			
-			console.log('✅ [TEST] URL analysis successful:', urlResult.data);
-
-			// Compile results
-			testResults = {
-				success: true,
-				topicAnalysis: {
-					topic: topicResult.data.mainTopic,
-					keyAspectsCount: topicResult.data.keyAspects.length,
-					difficulty: topicResult.data.difficulty,
-					estimatedTime: topicResult.data.estimatedTime
-				},
-				mindMap: {
-					nodeCount: mindMap.nodes.length,
-					edgeCount: mindMap.edges.length,
-					hasMainNode: mindMap.nodes.some((n: any) => n.data.isMainTopic)
-				},
-				conceptExpansion: {
-					concept: expansionResult.data.concept,
-					subConceptsCount: expansionResult.data.subConcepts.length,
-					applicationsCount: expansionResult.data.practicalApplications.length,
-					resourcesCount: expansionResult.data.resources.length
-				},
-				urlAnalysis: {
-					title: urlResult.data.title,
-					domain: urlResult.data.domain,
-					conceptsCount: urlResult.data.concepts.length,
-					credibilityScore: urlResult.data.credibility.score
-				}
-			};
-			
-			currentStep = 'All tests completed successfully! ✅';
-			console.log('🎉 [TEST] All tests passed successfully!');
+			// Test 5: Session Creation
+			await testSessionCreation();
 			
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			errors.push(errorMessage);
-			console.error('❌ [TEST] Test failed:', errorMessage);
-			
-			testResults = {
-				success: false,
-				error: errorMessage,
-				step: currentStep
-			};
+			console.error('Test suite error:', error);
 		} finally {
 			isRunning = false;
 		}
 	}
+
+	async function testDatabaseConnection() {
+		try {
+			const response = await fetch('/test/api/db-health');
+			const result = await response.json();
+			
+			if (result.success) {
+				testResults.dbConnection = {
+					status: 'success',
+					message: 'Database connection successful',
+					details: {
+						timestamp: result.data.current_time,
+						version: result.data.pg_version?.split(' ')[0],
+						tables: result.data.tables || []
+					}
+				};
+			} else {
+				testResults.dbConnection = {
+					status: 'error',
+					message: result.error || 'Database connection failed',
+					details: null
+				};
+			}
+		} catch (error: any) {
+			testResults.dbConnection = {
+				status: 'error',
+				message: `Connection test failed: ${error?.message || 'Unknown error'}`,
+				details: null
+			};
+		}
+	}
+
+	async function testSupabaseApi() {
+		testResults.supabaseApi = { status: 'running', message: 'Testing...', details: null };
+		
+		try {
+			// Test if Supabase API endpoint is reachable
+			const response = await fetch(`${config.supabaseUrl}/rest/v1/`, {
+				method: 'HEAD',
+				headers: {
+					'apikey': config.anonKey,
+					'Authorization': `Bearer ${config.anonKey}`
+				}
+			});
+			
+			if (response.ok || response.status === 404) { // 404 is expected for root endpoint
+				testResults.supabaseApi = {
+					status: 'success',
+					message: 'Supabase API endpoint is reachable',
+					details: {
+						status: response.status,
+						statusText: response.statusText,
+						url: config.supabaseUrl
+					}
+				};
+			} else {
+				testResults.supabaseApi = {
+					status: 'error',
+					message: `API returned status ${response.status}`,
+					details: { status: response.status, statusText: response.statusText }
+				};
+			}
+		} catch (error: any) {
+			testResults.supabaseApi = {
+				status: 'error',
+				message: `API test failed: ${error?.message || 'Unknown error'}`,
+				details: null
+			};
+		}
+	}
+
+	async function testAuthentication() {
+		testResults.authentication = { status: 'running', message: 'Testing...', details: null };
+		
+		try {
+			// Test JWT token validation
+			const response = await fetch(`${config.supabaseUrl}/rest/v1/sessions?select=count&limit=1`, {
+				headers: {
+					'apikey': config.anonKey,
+					'Authorization': `Bearer ${config.anonKey}`,
+					'Content-Type': 'application/json',
+					'Prefer': 'count=exact'
+				}
+			});
+			
+			if (response.ok) {
+				testResults.authentication = {
+					status: 'success',
+					message: 'JWT token authentication successful',
+					details: {
+						status: response.status,
+						headers: Object.fromEntries(response.headers.entries())
+					}
+				};
+			} else {
+				const errorText = await response.text();
+				testResults.authentication = {
+					status: 'error',
+					message: `Authentication failed: ${response.status} ${response.statusText}`,
+					details: { status: response.status, error: errorText }
+				};
+			}
+		} catch (error: any) {
+			testResults.authentication = {
+				status: 'error',
+				message: `Authentication test failed: ${error?.message || 'Unknown error'}`,
+				details: null
+			};
+		}
+	}
+
+	async function testTableAccess() {
+		testResults.tableAccess = { status: 'running', message: 'Testing...', details: null };
+		
+		try {
+			const tables = ['sessions', 'topics', 'mind_maps', 'sources', 'content_progress', 'ai_generations'];
+			const results: Record<string, any> = {};
+			
+			for (const table of tables) {
+				try {
+					const response = await fetch(`${config.supabaseUrl}/rest/v1/${table}?select=count&limit=1`, {
+						headers: {
+							'apikey': config.anonKey,
+							'Authorization': `Bearer ${config.anonKey}`,
+							'Content-Type': 'application/json'
+						}
+					});
+					
+					results[table] = {
+						status: response.ok ? 'accessible' : 'error',
+						code: response.status
+					};
+				} catch (error) {
+					results[table] = {
+						status: 'error',
+						code: 'NETWORK_ERROR'
+					};
+				}
+			}
+			
+			const accessibleTables = Object.entries(results).filter(([, result]: [string, any]) => result.status === 'accessible');
+			
+			testResults.tableAccess = {
+				status: accessibleTables.length > 0 ? 'success' : 'error',
+				message: `${accessibleTables.length}/${tables.length} tables accessible`,
+				details: results
+			};
+		} catch (error: any) {
+			testResults.tableAccess = {
+				status: 'error',
+				message: `Table access test failed: ${error?.message || 'Unknown error'}`,
+				details: null
+			};
+		}
+	}
+
+	async function testSessionCreation() {
+		testResults.sessionCreation = { status: 'running', message: 'Testing...', details: null };
+		
+		try {
+			// Try to create a test session
+			const sessionData = {
+				settings: { test: true, created_by: 'test-page' },
+				topic_count: 0
+			};
+			
+			const response = await fetch(`${config.supabaseUrl}/rest/v1/sessions`, {
+				method: 'POST',
+				headers: {
+					'apikey': config.anonKey,
+					'Authorization': `Bearer ${config.anonKey}`,
+					'Content-Type': 'application/json',
+					'Prefer': 'return=representation'
+				},
+				body: JSON.stringify(sessionData)
+			});
+			
+			if (response.ok) {
+				const data = await response.json();
+				
+				// Clean up test session
+				await fetch(`${config.supabaseUrl}/rest/v1/sessions?id=eq.${data[0].id}`, {
+					method: 'DELETE',
+					headers: {
+						'apikey': config.anonKey,
+						'Authorization': `Bearer ${config.anonKey}`
+					}
+				});
+				
+				testResults.sessionCreation = {
+					status: 'success',
+					message: 'Session creation and deletion successful',
+					details: { sessionId: data[0].id }
+				};
+			} else {
+				const errorText = await response.text();
+				testResults.sessionCreation = {
+					status: 'error',
+					message: `Session creation failed: ${response.status} ${response.statusText}`,
+					details: { status: response.status, error: errorText }
+				};
+			}
+		} catch (error: any) {
+			testResults.sessionCreation = {
+				status: 'error',
+				message: `Session creation test failed: ${error?.message || 'Unknown error'}`,
+				details: null
+			};
+		}
+	}
+
+	function getStatusIcon(status: string) {
+		switch (status) {
+			case 'success': return CheckCircle;
+			case 'error': return XCircle;
+			case 'running': return AlertCircle;
+			default: return AlertCircle;
+		}
+	}
+
+	function getStatusColor(status: string) {
+		switch (status) {
+			case 'success': return 'text-green-600';
+			case 'error': return 'text-red-600';
+			case 'running': return 'text-yellow-600';
+			default: return 'text-gray-400';
+		}
+	}
+
+	onMount(() => {
+		// Auto-run tests when page loads
+		runTests();
+	});
 </script>
 
 <svelte:head>
-	<title>AI Integration Test - Explore.fyi</title>
+	<title>Database & API Test Dashboard - Explore.fyi</title>
 </svelte:head>
 
-<div class="min-h-screen bg-zinc-50 py-8">
+<div class="min-h-screen bg-gray-50 py-8">
 	<div class="max-w-4xl mx-auto px-4">
+		<!-- Header -->
 		<div class="text-center mb-8">
-			<h1 class="text-3xl font-bold text-zinc-900 mb-4">AI Integration Test</h1>
-			<p class="text-zinc-600">Test the complete AI pipeline for topic analysis, mind mapping, and concept expansion</p>
+			<h1 class="text-3xl font-bold text-gray-900 mb-2">Database & API Test Dashboard</h1>
+			<p class="text-gray-600">Development environment testing for Explore.fyi</p>
 		</div>
 
-		<div class="bg-white rounded-lg shadow-sm border border-zinc-200 p-6 mb-6">
-			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-xl font-semibold text-zinc-900">Test Suite</h2>
+		<!-- Configuration Panel -->
+		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+			<h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+				<Server class="h-5 w-5 mr-2" />
+				Configuration
+			</h2>
+			<div class="grid grid-cols-1 gap-4">
+				<div>
+					<label for="supabase-url" class="block text-sm font-medium text-gray-700 mb-1">Supabase URL</label>
+					<input 
+						id="supabase-url"
+						type="text" 
+						bind:value={config.supabaseUrl}
+						class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono bg-gray-50"
+						readonly
+					/>
+				</div>
+				<div>
+					<label for="anon-key" class="block text-sm font-medium text-gray-700 mb-1">Anonymous Key</label>
+					<input 
+						id="anon-key"
+						type="password" 
+						value={config.anonKey}
+						class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono bg-gray-50"
+						readonly
+					/>
+				</div>
+			</div>
+		</div>
+
+		<!-- Test Controls -->
+		<div class="flex justify-center mb-6">
 				<button 
-					onclick={runAITest}
+				onclick={runTests}
 					disabled={isRunning}
-					class="btn btn-primary"
-					class:opacity-50={isRunning}
+				class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
 				>
-					{isRunning ? 'Running Tests...' : 'Run AI Tests'}
+				{isRunning ? 'Running Tests...' : 'Run Tests'}
 				</button>
 			</div>
 			
-			{#if isRunning}
-				<div class="mb-4">
-					<div class="flex items-center space-x-3">
-						<div class="w-5 h-5 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin"></div>
-						<span class="text-zinc-700">{currentStep}</span>
+		<!-- Test Results -->
+		<div class="space-y-4">
+			<!-- Database Connection Test -->
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900 flex items-center">
+						<Database class="h-5 w-5 mr-2" />
+						Direct Database Connection
+					</h3>
+					<div class="flex items-center">
+						{#snippet statusIcon()}
+							{@const Icon = getStatusIcon(testResults.dbConnection.status)}
+							<Icon class="h-5 w-5 {getStatusColor(testResults.dbConnection.status)}" />
+						{/snippet}
+						{@render statusIcon()}
 					</div>
 				</div>
-			{/if}
-
-			{#if errors.length > 0}
-				<div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-					<h3 class="font-semibold text-red-900 mb-2">Errors:</h3>
-					{#each errors as error}
-						<p class="text-red-700 text-sm">{error}</p>
-					{/each}
+				<p class="text-gray-600 mb-2">{testResults.dbConnection.message}</p>
+				{#if testResults.dbConnection.details}
+					<div class="bg-gray-50 rounded p-3 text-sm">
+						<p><strong>Timestamp:</strong> {testResults.dbConnection.details?.timestamp || 'N/A'}</p>
+						<p><strong>PostgreSQL Version:</strong> {testResults.dbConnection.details?.version || 'N/A'}</p>
+						<p><strong>Tables Found:</strong> {testResults.dbConnection.details?.tables?.length || 0}</p>
 				</div>
 			{/if}
+			</div>
 
-			{#if testResults}
-				<div class="border rounded-lg p-4">
-					<h3 class="font-semibold text-zinc-900 mb-4">Test Results</h3>
-					
-					{#if testResults.success}
-						<div class="space-y-4">
-							<div class="flex items-center space-x-2">
-								<div class="w-3 h-3 bg-green-500 rounded-full"></div>
-								<span class="font-medium text-green-900">All Tests Passed ✅</span>
+			<!-- Supabase API Test -->
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900 flex items-center">
+						<Globe class="h-5 w-5 mr-2" />
+						Supabase API Endpoint
+					</h3>
+					<div class="flex items-center">
+						{#snippet statusIcon()}
+							{@const Icon = getStatusIcon(testResults.supabaseApi.status)}
+							<Icon class="h-5 w-5 {getStatusColor(testResults.supabaseApi.status)}" />
+						{/snippet}
+						{@render statusIcon()}
+					</div>
+				</div>
+				<p class="text-gray-600 mb-2">{testResults.supabaseApi.message}</p>
+				{#if testResults.supabaseApi.details}
+					<div class="bg-gray-50 rounded p-3 text-sm">
+						<p><strong>Status:</strong> {testResults.supabaseApi.details?.status || 'N/A'}</p>
+						<p><strong>URL:</strong> {testResults.supabaseApi.details?.url || 'N/A'}</p>
+				</div>
+			{/if}
 							</div>
 							
-							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div class="bg-zinc-50 rounded-lg p-4">
-									<h4 class="font-semibold text-zinc-900 mb-2">📝 Topic Analysis</h4>
-									<ul class="text-sm text-zinc-700 space-y-1">
-										<li>Topic: {testResults.topicAnalysis.topic}</li>
-										<li>Key Aspects: {testResults.topicAnalysis.keyAspectsCount}</li>
-										<li>Difficulty: {testResults.topicAnalysis.difficulty}</li>
-										<li>Time: {testResults.topicAnalysis.estimatedTime}</li>
-									</ul>
-								</div>
-								
-								<div class="bg-zinc-50 rounded-lg p-4">
-									<h4 class="font-semibold text-zinc-900 mb-2">🗺️ Mind Map</h4>
-									<ul class="text-sm text-zinc-700 space-y-1">
-										<li>Nodes: {testResults.mindMap.nodeCount}</li>
-										<li>Edges: {testResults.mindMap.edgeCount}</li>
-										<li>Main Node: {testResults.mindMap.hasMainNode ? '✅' : '❌'}</li>
-									</ul>
-								</div>
-								
-								<div class="bg-zinc-50 rounded-lg p-4">
-									<h4 class="font-semibold text-zinc-900 mb-2">🔍 Concept Expansion</h4>
-									<ul class="text-sm text-zinc-700 space-y-1">
-										<li>Concept: {testResults.conceptExpansion.concept}</li>
-										<li>Sub-concepts: {testResults.conceptExpansion.subConceptsCount}</li>
-										<li>Applications: {testResults.conceptExpansion.applicationsCount}</li>
-										<li>Resources: {testResults.conceptExpansion.resourcesCount}</li>
-									</ul>
-								</div>
-								
-								<div class="bg-zinc-50 rounded-lg p-4">
-									<h4 class="font-semibold text-zinc-900 mb-2">🌐 URL Analysis</h4>
-									<ul class="text-sm text-zinc-700 space-y-1">
-										<li>Title: {testResults.urlAnalysis.title}</li>
-										<li>Domain: {testResults.urlAnalysis.domain}</li>
-										<li>Concepts: {testResults.urlAnalysis.conceptsCount}</li>
-										<li>Credibility: {testResults.urlAnalysis.credibilityScore}/10</li>
-									</ul>
-								</div>
-							</div>
-						</div>
-					{:else}
-						<div class="space-y-2">
-							<div class="flex items-center space-x-2">
-								<div class="w-3 h-3 bg-red-500 rounded-full"></div>
-								<span class="font-medium text-red-900">Test Failed ❌</span>
-							</div>
-							<p class="text-red-700">Failed at: {testResults.step}</p>
-							<p class="text-red-600 text-sm">{testResults.error}</p>
-						</div>
-					{/if}
+			<!-- Authentication Test -->
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900 flex items-center">
+						<Key class="h-5 w-5 mr-2" />
+						JWT Authentication
+					</h3>
+					<div class="flex items-center">
+						{#snippet statusIcon()}
+							{@const Icon = getStatusIcon(testResults.authentication.status)}
+							<Icon class="h-5 w-5 {getStatusColor(testResults.authentication.status)}" />
+						{/snippet}
+						{@render statusIcon()}
+					</div>
 				</div>
-			{/if}
+				<p class="text-gray-600 mb-2">{testResults.authentication.message}</p>
+				{#if testResults.authentication.details}
+					<div class="bg-gray-50 rounded p-3 text-sm">
+						<p><strong>HTTP Status:</strong> {testResults.authentication.details?.status || 'N/A'}</p>
+						{#if testResults.authentication.details?.error}
+							<p><strong>Error:</strong> {testResults.authentication.details.error}</p>
+						{/if}
+					</div>
+				{/if}
+								</div>
+								
+			<!-- Table Access Test -->
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900 flex items-center">
+						<Database class="h-5 w-5 mr-2" />
+						Table Access
+					</h3>
+					<div class="flex items-center">
+						{#snippet statusIcon()}
+							{@const Icon = getStatusIcon(testResults.tableAccess.status)}
+							<Icon class="h-5 w-5 {getStatusColor(testResults.tableAccess.status)}" />
+						{/snippet}
+						{@render statusIcon()}
+								</div>
+								</div>
+				<p class="text-gray-600 mb-2">{testResults.tableAccess.message}</p>
+				{#if testResults.tableAccess.details}
+					<div class="bg-gray-50 rounded p-3 text-sm">
+						<div class="grid grid-cols-2 gap-2">
+							{#each Object.entries(testResults.tableAccess.details) as [table, result]}
+								<div class="flex items-center justify-between">
+									<span>{table}:</span>
+									<span class="font-medium {(result as any)?.status === 'accessible' ? 'text-green-600' : 'text-red-600'}">
+										{(result as any)?.status === 'accessible' ? '✓' : '✗'} ({(result as any)?.code})
+									</span>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Session Creation Test -->
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900 flex items-center">
+						<CheckCircle class="h-5 w-5 mr-2" />
+						Session Creation
+					</h3>
+					<div class="flex items-center">
+						{#snippet statusIcon()}
+							{@const Icon = getStatusIcon(testResults.sessionCreation.status)}
+							<Icon class="h-5 w-5 {getStatusColor(testResults.sessionCreation.status)}" />
+						{/snippet}
+						{@render statusIcon()}
+					</div>
+				</div>
+				<p class="text-gray-600 mb-2">{testResults.sessionCreation.message}</p>
+				{#if testResults.sessionCreation.details}
+					<div class="bg-gray-50 rounded p-3 text-sm">
+						{#if testResults.sessionCreation.details?.sessionId}
+							<p><strong>Test Session ID:</strong> {testResults.sessionCreation.details.sessionId}</p>
+						{/if}
+						{#if testResults.sessionCreation.details?.error}
+							<p><strong>Error:</strong> {testResults.sessionCreation.details.error}</p>
+						{/if}
+					</div>
+				{/if}
+			</div>
 		</div>
 
-		<div class="bg-white rounded-lg shadow-sm border border-zinc-200 p-6">
-			<h3 class="text-lg font-semibold text-zinc-900 mb-4">Test Coverage</h3>
-			<ul class="space-y-2 text-zinc-700">
-				<li class="flex items-center space-x-2">
-					<div class="w-2 h-2 bg-blue-500 rounded-full"></div>
-					<span>Topic Analysis API endpoint</span>
-				</li>
-				<li class="flex items-center space-x-2">
-					<div class="w-2 h-2 bg-green-500 rounded-full"></div>
-					<span>Mind map structure generation</span>
-				</li>
-				<li class="flex items-center space-x-2">
-					<div class="w-2 h-2 bg-purple-500 rounded-full"></div>
-					<span>Concept expansion with AI</span>
-				</li>
-				<li class="flex items-center space-x-2">
-					<div class="w-2 h-2 bg-orange-500 rounded-full"></div>
-					<span>URL content analysis</span>
-				</li>
-				<li class="flex items-center space-x-2">
-					<div class="w-2 h-2 bg-red-500 rounded-full"></div>
-					<span>Error handling and validation</span>
-				</li>
-			</ul>
+		<!-- Development Note -->
+		<div class="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+			<p class="text-yellow-800 text-sm">
+				<strong>Development Only:</strong> This test page is only available in development mode (npm run dev) and will not be accessible in production.
+			</p>
 		</div>
 	</div>
 </div>
-

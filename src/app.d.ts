@@ -10,4 +10,18 @@ declare global {
 	}
 }
 
+// Environment variables (currently using hardcoded values in supabase.ts)
+// declare module '$env/static/public' {
+// 	export const PUBLIC_SUPABASE_URL: string;
+// 	export const PUBLIC_SUPABASE_ANON_KEY: string;
+// }
+
+// Server-side environment variables (only use in +page.server.ts files)
+// declare module '$env/dynamic/private' {
+// 	export const env: {
+// 		GEMINI_API_KEY?: string;
+// 		[key: string]: string | undefined;
+// 	};
+// }
+
 export {};

@@ -11,6 +11,10 @@
 		analyzeUrlStreaming,
 		type StreamingNodeData 
 	} from '$lib/services/topicAnalysis.js';
+	import { 
+		analyzeTopicStreamingWithPersistence,
+		analyzeUrlStreamingWithPersistence 
+	} from '$lib/services/topicAnalysisWithPersistence.js';
 	import { analyzeUrl, createMindMapFromUrlAnalysis, validateUrl } from '$lib/services/urlAnalysis.js';
 
 	// Reactive variables for page state
@@ -50,11 +54,11 @@
 		
 		try {
 			if (topic) {
-				console.log(`📝 [UI] Processing topic with streaming: "${topic}"`);
-				await analyzeTopicStreaming(topic, handleStreamingProgress);
+				console.log(`📝 [UI] Processing topic with persistence: "${topic}"`);
+				await analyzeTopicStreamingWithPersistence(topic, handleStreamingProgress);
 			} else if (url) {
-				console.log(`🔗 [UI] Processing URL with streaming: "${url}"`);
-				await analyzeUrlStreaming(url, handleStreamingProgress);
+				console.log(`🔗 [UI] Processing URL with persistence: "${url}"`);
+				await analyzeUrlStreamingWithPersistence(url, handleStreamingProgress);
 			}
 			
 			console.log('✅ [UI] Progressive mind map generation completed successfully');

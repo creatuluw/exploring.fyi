@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { Brain, Search, BookOpen, Menu, X } from 'lucide-svelte';
+	import { Brain, Search, BookOpen, Menu, X, Database } from 'lucide-svelte';
 	import { page } from '$app/stores';
+	import { dev } from '$app/environment';
 	
 	let mobileMenuOpen = $state(false);
 	
@@ -31,20 +32,37 @@
 			
 			<!-- Desktop Navigation -->
 			<nav class="hidden md:flex items-center space-x-1">
-				<a 
-					href="/" 
+				<a
+					href="/"
 					class="flex items-center space-x-2 text-zinc-600 hover:text-zinc-900 px-3 py-2 rounded-md font-medium text-sm transition-colors duration-200 {$page.url.pathname === '/' ? 'text-zinc-900 bg-zinc-100' : 'hover:bg-zinc-50'}"
 				>
 					<Search class="h-4 w-4" />
 					<span>Explore</span>
 				</a>
-				<a 
-					href="/about" 
+				<a
+					href="/history"
+					class="flex items-center space-x-2 text-zinc-600 hover:text-zinc-900 px-3 py-2 rounded-md font-medium text-sm transition-colors duration-200 {$page.url.pathname.startsWith('/history') ? 'text-zinc-900 bg-zinc-100' : 'hover:bg-zinc-50'}"
+				>
+					<Brain class="h-4 w-4" />
+					<span>History</span>
+				</a>
+				<a
+					href="/about"
 					class="flex items-center space-x-2 text-zinc-600 hover:text-zinc-900 px-3 py-2 rounded-md font-medium text-sm transition-colors duration-200 {$page.url.pathname.startsWith('/about') ? 'text-zinc-900 bg-zinc-100' : 'hover:bg-zinc-50'}"
 				>
 					<BookOpen class="h-4 w-4" />
 					<span>About</span>
 				</a>
+				{#if dev}
+					<a
+						href="/test"
+						class="flex items-center space-x-2 text-orange-600 hover:text-orange-800 px-3 py-2 rounded-md font-medium text-sm transition-colors duration-200 {$page.url.pathname.startsWith('/test') ? 'text-orange-800 bg-orange-100' : 'hover:bg-orange-50'}"
+						title="Development Test Dashboard"
+					>
+						<Database class="h-4 w-4" />
+						<span>Test</span>
+					</a>
+				{/if}
 			</nav>
 			
 			<!-- CTA Button -->

@@ -6,8 +6,12 @@
 	import NodeDetailsPanel from './NodeDetailsPanel.svelte';
 	import ChatPanel from './ChatPanel.svelte';
 	import { expandConcept, createExpandedConceptNodes } from '$lib/services/topicAnalysis.js';
+	import { expandConceptWithPersistence } from '$lib/services/topicAnalysisWithPersistence.js';
 	import { mindMapEvents, clearNodeEvent } from '$lib/stores/mindMapEvents';
 	import { createContentId } from '$lib/services/contentGeneration.js';
+	import { progressTracker } from '$lib/services/progressTracking.js';
+	import { session } from '$lib/stores/session.js';
+	import { get } from 'svelte/store';
 	import { goto } from '$app/navigation';
 	
 	interface MindMapData {
@@ -39,10 +43,22 @@
 	let selectedNodeData = $state<any>(null);
 	let chatTopic = $state('');
 	
+	// Progress tracking - use the global instance
+	let currentTopicId = $state<string | null>(null);
+	
 	// Update nodes and edges when data changes
 	$effect(() => {
 		if (data?.nodes) {
 			nodes = data.nodes;
+			
+			// Start tracking for the main topic node if we have one
+			const mainNode = data.nodes.find(n => n.data?.isMainTopic);
+			if (mainNode && !currentTopicId) {
+				// In a real implementation, we'd get the topic ID from the data
+				// For now, we'll use the node label as a temporary identifier
+				currentTopicId = mainNode.data.label as string;
+				progressTracker.startTopicTracking(currentTopicId);
+			}
 		}
 		if (data?.edges) {
 			edges = data.edges;
@@ -68,6 +84,10 @@
 						break;
 					case 'click':
 						handleNodeClick({ detail: { node: { id: event.nodeId, data: event.nodeData } } } as CustomEvent);
+						// Track node click for analytics
+						if (currentTopicId) {
+							progressTracker.trackNodeClick(currentTopicId, event.nodeId, event.nodeData);
+						}
 						break;
 				}
 				clearNodeEvent();
@@ -100,6 +120,15 @@
 	const handleNodeExpand = async (nodeId: string, nodeData: any) => {
 		console.log(`🔄 [MindMap] Starting node expansion for: "${nodeData.label}" (ID: ${nodeId})`);
 		
+		// Track concept expansion for analytics
+		if (currentTopicId) {
+			progressTracker.trackConceptExpansion(currentTopicId, nodeId, {
+				conceptLabel: nodeData.label,
+				level: nodeData.level || 0,
+				parentTopic: nodeData.parentTopic
+			});
+		}
+		
 		// Don't expand if already expanded
 		if (nodeData.expanded) {
 			console.log(`⚠️ [MindMap] Node already expanded: ${nodeId}`);
@@ -119,29 +148,40 @@
 		nodes = loadingNodes;
 		
 		try {
-			console.log(`🤖 [MindMap] Calling expandConcept AI service...`);
-			// Use AI service to expand the concept
-			const expansion = await expandConcept(nodeData.label, nodeData.parentTopic);
-			console.log(`✅ [MindMap] AI expansion received with ${expansion.subConcepts.length} sub-concepts`);
+			console.log(`🤖 [MindMap] Calling expandConcept with persistence...`);
+			// Use enhanced AI service with persistence if we have session info
+			const sessionState = get(session);
+			if (sessionState.id && currentTopicId) {
+				// Get the mind map ID from the current topic
+				// TODO: Pass proper mindMapId from parent component
+				const mindMapId = 'current-mindmap'; // Placeholder
+				await expandConceptWithPersistence(nodeData.label, nodeData.parentTopic, mindMapId, nodeId);
+				console.log(`✅ [MindMap] Expansion with persistence completed`);
+				return; // The persistence function handles UI updates via events
+			} else {
+				// Fallback to basic expansion
+				const expansion = await expandConcept(nodeData.label, nodeData.parentTopic);
+				console.log(`✅ [MindMap] AI expansion received with ${expansion.subConcepts.length} sub-concepts`);
 			
-			// Create new nodes and edges from AI expansion
-			const { nodes: newNodes, edges: newEdges } = createExpandedConceptNodes(
-				nodeId, 
-				expansion, 
-				expandingNode.position
-			);
-			
-			// Add new nodes and edges to the existing ones
-			const updatedNodes = nodes.map(node => 
-				node.id === nodeId 
-					? { ...node, data: { ...node.data, expanding: false, expanded: true } }
-					: node
-			);
-			
-			nodes = [...updatedNodes, ...newNodes];
-			edges = [...edges, ...newEdges];
-			
-			console.log(`🎉 [MindMap] Node expansion completed! Added ${newNodes.length} new nodes and ${newEdges.length} new edges`);
+				// Create new nodes and edges from AI expansion
+				const { nodes: newNodes, edges: newEdges } = createExpandedConceptNodes(
+					nodeId, 
+					expansion, 
+					expandingNode.position
+				);
+				
+				// Add new nodes and edges to the existing ones
+				const updatedNodes = nodes.map(node => 
+					node.id === nodeId 
+						? { ...node, data: { ...node.data, expanding: false, expanded: true } }
+						: node
+				);
+				
+				nodes = [...updatedNodes, ...newNodes];
+				edges = [...edges, ...newEdges];
+				
+				console.log(`🎉 [MindMap] Node expansion completed! Added ${newNodes.length} new nodes and ${newEdges.length} new edges`);
+			}
 			
 		} catch (error) {
 			console.error(`❌ [MindMap] Failed to expand concept "${nodeData.label}":`, error);

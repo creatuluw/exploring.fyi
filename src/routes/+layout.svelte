@@ -2,8 +2,20 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import Header from '$lib/components/Header.svelte';
+	import { session, isSessionReady } from '$lib/stores/session.js';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
+
+	// Initialize session when the app loads
+	onMount(async () => {
+		try {
+			await session.initialize();
+			console.log('Session initialized successfully');
+		} catch (error) {
+			console.error('Failed to initialize session:', error);
+		}
+	});
 </script>
 
 <svelte:head>
