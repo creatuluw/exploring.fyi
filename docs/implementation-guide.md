@@ -897,7 +897,7 @@ export async function generateSourceSuggestions(concept: string): Promise<string
 ### Day 14: Topic Page Layout
 
 #### 14.1 Create Topic Page Route
-**src/routes/topic/[id]/+page.svelte**
+**src/routes/topic/[slug]/+page.svelte**
 ```svelte
 <script lang="ts">
   import { onMount } from 'svelte';

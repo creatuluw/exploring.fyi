@@ -273,3 +273,59 @@ export interface LearningResource {
   content?: string;
   learningStyle: 'visual' | 'auditory' | 'kinesthetic' | 'reading';
 }
+
+// Normalized ToC types (Chapters & Paragraphs)
+export interface ChapterRecord {
+  id: string;
+  topicId: string;
+  index: number; // 1-based order within topic
+  title: string;
+  description?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ParagraphRecord {
+  id: string;
+  topicId: string;
+  chapterId: string;
+  index: number; // 1-based order within chapter
+  content?: string; // present when generated
+  summary?: string;
+  metadata?: Record<string, any>;
+  isGenerated: boolean;
+  generatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChapterWithParagraphs extends ChapterRecord {
+  paragraphs: ParagraphRecord[];
+}
+
+// Chapter check types
+export interface ChapterCheckQuestion {
+  id: string;
+  text: string;
+}
+
+export interface ChapterCheckAnswer {
+  questionId: string;
+  userAnswer: string;
+}
+
+export interface ChapterCheckAttempt {
+  id: string;
+  sessionId: string;
+  topicId: string;
+  chapterId: string;
+  questions: ChapterCheckQuestion[];
+  answers: ChapterCheckAnswer[];
+  aiFeedback?: Record<string, any>;
+  score: number; // 1-10
+  model?: string;
+  durationSeconds?: number;
+  createdAt: string;
+  updatedAt: string;
+}

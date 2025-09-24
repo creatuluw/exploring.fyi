@@ -1,0 +1,11 @@
+delete from public.chapters;
+delete from public.checks_done;
+delete from public.content_progress;
+delete from public.mind_maps;
+delete from public.paragraph_progress;
+delete from public.paragraph_qa;
+delete from public.paragraphs;
+delete from public.sessions;
+delete from public.sources;
+delete from public.topics;
+delete from public.toc;

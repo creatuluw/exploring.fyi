@@ -5,14 +5,19 @@
 	import ConceptNode from './ConceptNode.svelte';
 	import NodeDetailsPanel from './NodeDetailsPanel.svelte';
 	import ChatPanel from './ChatPanel.svelte';
-	import { expandConcept, createExpandedConceptNodes } from '$lib/services/topicAnalysis.js';
-	import { expandConceptWithPersistence } from '$lib/services/topicAnalysisWithPersistence.js';
-	import { mindMapEvents, clearNodeEvent } from '$lib/stores/mindMapEvents';
-	import { createContentId } from '$lib/services/contentGeneration.js';
-	import { progressTracker } from '$lib/services/progressTracking.js';
-	import { session } from '$lib/stores/session.js';
-	import { get } from 'svelte/store';
+import { expandConcept, createExpandedConceptNodes } from '$lib/services/topicAnalysis.js';
+import { expandConceptWithPersistence } from '$lib/services/topicAnalysisWithPersistence.js';
+import { Loader2 } from 'lucide-svelte';
+import { mindMapEvents, clearNodeEvent } from '$lib/stores/mindMapEvents';
+import { createContentId } from '$lib/services/contentGeneration.js';
+import { progressTracker } from '$lib/services/progressTracking.js';
+import { session } from '$lib/stores/session.js';
+import { aiLanguage } from '$lib/stores/language.js';
+import { get } from 'svelte/store';
 	import { goto } from '$app/navigation';
+	import { ErrorRecovery } from '$lib/utils/errorRecovery.js';
+	import { optimisticAnimations } from '$lib/utils/animations.js';
+	import { MINDMAP_NODE_RADIUS, MAX_MINDMAP_NODES } from '$lib/settings';
 	
 	interface MindMapData {
 		nodes: Node[];
@@ -23,9 +28,11 @@
 	
 	interface Props {
 		data: MindMapData;
+		detailsPanelOpen?: boolean;
+		selectedNodeData?: any;
 	}
 	
-	let { data }: Props = $props();
+	let { data, detailsPanelOpen = $bindable(false), selectedNodeData = $bindable(null) }: Props = $props();
 	
 	// Node types for Svelte Flow
 	const nodeTypes = {
@@ -38,13 +45,14 @@
 	let edges = $state<Edge[]>(data.edges || []);
 	
 	// Panel states
-	let detailsPanelOpen = $state(false);
 	let chatPanelOpen = $state(false);
-	let selectedNodeData = $state<any>(null);
 	let chatTopic = $state('');
 	
 	// Progress tracking - use the global instance
 	let currentTopicId = $state<string | null>(null);
+	
+	// Track optimistic expansions for rollback
+	let optimisticExpansions = new Map<string, { nodeIds: string[], edgeIds: string[] }>();
 	
 	// Update nodes and edges when data changes
 	$effect(() => {
@@ -71,8 +79,10 @@
 			if (event) {
 				switch (event.type) {
 					case 'openDetails':
-						// Navigate to content page instead of opening details panel
-						handleNavigateToContent(event.nodeData);
+						// Open details panel instead of navigating away
+						selectedNodeData = event.nodeData;
+						detailsPanelOpen = true;
+						chatPanelOpen = false;
 						break;
 					case 'openChat':
 						chatTopic = event.nodeData.label;
@@ -99,6 +109,76 @@
 		};
 	});
 	
+	// Generate placeholder nodes for optimistic expansion
+	const createPlaceholderNodes = (parentNodeId: string, parentPosition: any, count: number = MAX_MINDMAP_NODES) => {
+		const placeholderNodes = [];
+		const placeholderEdges = [];
+		const radius = MINDMAP_NODE_RADIUS;
+		
+		for (let i = 0; i < count; i++) {
+			const angle = (i * 2 * Math.PI) / count;
+			const x = parentPosition.x + Math.cos(angle) * radius;
+			const y = parentPosition.y + Math.sin(angle) * radius;
+			
+			const nodeId = `placeholder-${parentNodeId}-${i}`;
+			
+			placeholderNodes.push({
+				id: nodeId,
+				type: 'conceptNode',
+				position: { x: x - 100, y: y - 40 }, // Center the node
+				data: {
+					label: '...',
+					description: 'Loading concept...',
+					level: 1,
+					expandable: false,
+					isPlaceholder: true,
+					parentNode: parentNodeId,
+					expanding: false
+				}
+			});
+			
+			placeholderEdges.push({
+				id: `edge-${parentNodeId}-${nodeId}`,
+				source: parentNodeId,
+				target: nodeId,
+				type: 'smoothstep',
+				style: 'stroke: #d1d5db; stroke-dasharray: 5,5;', // Dashed for placeholder
+				animated: true
+			});
+		}
+		
+		return { nodes: placeholderNodes, edges: placeholderEdges };
+	};
+
+	// Remove placeholder nodes and edges
+	const removePlaceholders = (parentNodeId: string) => {
+		const expansion = optimisticExpansions.get(parentNodeId);
+		if (!expansion) return;
+		
+		// Remove placeholder nodes and edges
+		nodes = nodes.filter(n => !expansion.nodeIds.includes(n.id));
+		edges = edges.filter(e => !expansion.edgeIds.includes(e.id));
+		
+		// Clean up tracking
+		optimisticExpansions.delete(parentNodeId);
+	};
+
+	// Replace placeholders with real nodes
+	const replacePlaceholdersWithReal = (parentNodeId: string, realNodes: any[], realEdges: any[]) => {
+		// Remove placeholders first
+		removePlaceholders(parentNodeId);
+		
+		// Add real nodes and edges
+		nodes = [...nodes, ...realNodes];
+		edges = [...edges, ...realEdges];
+		
+		// Animate new nodes
+		setTimeout(() => {
+			const newNodeElements = document.querySelectorAll(`[data-id^="${parentNodeId}-"]`);
+			optimisticAnimations.slideInNodes(Array.from(newNodeElements) as HTMLElement[]);
+		}, 50);
+	};
+
 	// Handle node expansion
 	const handleNavigateToContent = (nodeData: any) => {
 		console.log('🔗 [MindMap] Navigating to content page for:', nodeData.label);
@@ -109,16 +189,37 @@
 			difficulty: nodeData.difficulty || 'intermediate'
 		});
 		
-		// Add context if this is a sub-concept
+		// Enhanced context with complete node information
+		const mainTopicNode = nodes.find(n => n.data?.isMainTopic);
+		const enhancedContext = {
+			// Main topic information
+			mainTopic: {
+				title: mainTopicNode?.data?.label || '',
+				description: mainTopicNode?.data?.description || ''
+			},
+			// Current node information  
+			nodeInfo: {
+				description: nodeData.description || '',
+				level: nodeData.level || 0,
+				importance: nodeData.importance || 'medium',
+				connections: nodeData.connections || [],
+				parentId: nodeData.parentId || ''
+			}
+		};
+		
+		// Add enhanced context as JSON string
+		params.set('context', JSON.stringify(enhancedContext));
+		
+		// Add legacy context for backward compatibility
 		if (nodeData.parentTopic) {
-			params.set('context', nodeData.parentTopic);
+			params.set('parentTopic', nodeData.parentTopic);
 		}
 		
 		goto(`/topic/${contentId}?${params.toString()}`);
 	};
 
 	const handleNodeExpand = async (nodeId: string, nodeData: any) => {
-		console.log(`🔄 [MindMap] Starting node expansion for: "${nodeData.label}" (ID: ${nodeId})`);
+		console.log(`🚀 [MindMap] Starting optimistic node expansion for: "${nodeData.label}" (ID: ${nodeId})`);
 		
 		// Track concept expansion for analytics
 		if (currentTopicId) {
@@ -135,117 +236,86 @@
 			return;
 		}
 		
-		// Mark node as loading
 		const expandingNode = nodes.find(n => n.id === nodeId);
 		if (!expandingNode) return;
-		
-		// Update node to show loading state
-		const loadingNodes = nodes.map(node => 
-			node.id === nodeId 
-				? { ...node, data: { ...node.data, expanding: true } }
-				: node
-		);
-		nodes = loadingNodes;
-		
-		try {
-			console.log(`🤖 [MindMap] Calling expandConcept with persistence...`);
-			// Use enhanced AI service with persistence if we have session info
-			const sessionState = get(session);
-			if (sessionState.id && currentTopicId) {
-				// Get the mind map ID from the current topic
-				// TODO: Pass proper mindMapId from parent component
-				const mindMapId = 'current-mindmap'; // Placeholder
-				await expandConceptWithPersistence(nodeData.label, nodeData.parentTopic, mindMapId, nodeId);
-				console.log(`✅ [MindMap] Expansion with persistence completed`);
-				return; // The persistence function handles UI updates via events
-			} else {
-				// Fallback to basic expansion
-				const expansion = await expandConcept(nodeData.label, nodeData.parentTopic);
-				console.log(`✅ [MindMap] AI expansion received with ${expansion.subConcepts.length} sub-concepts`);
-			
-				// Create new nodes and edges from AI expansion
-				const { nodes: newNodes, edges: newEdges } = createExpandedConceptNodes(
-					nodeId, 
-					expansion, 
-					expandingNode.position
-				);
+
+		// Use ErrorRecovery for optimistic expansion
+		await ErrorRecovery.withAIServiceRecovery(
+			`node-expand-${nodeId}`,
+			() => {
+				// Optimistic Update: Add placeholder nodes immediately
+				console.log(`✨ [MindMap] Adding placeholder nodes for: ${nodeId}`);
 				
-				// Add new nodes and edges to the existing ones
-				const updatedNodes = nodes.map(node => 
+				// Mark node as expanded and not expanding (optimistic)
+				nodes = nodes.map(node => 
 					node.id === nodeId 
-						? { ...node, data: { ...node.data, expanding: false, expanded: true } }
+						? { ...node, data: { ...node.data, expanded: true, expanding: false } }
 						: node
 				);
 				
-				nodes = [...updatedNodes, ...newNodes];
-				edges = [...edges, ...newEdges];
+				// Create and add placeholder nodes
+				const { nodes: placeholderNodes, edges: placeholderEdges } = createPlaceholderNodes(
+					nodeId, 
+					expandingNode.position
+				);
 				
-				console.log(`🎉 [MindMap] Node expansion completed! Added ${newNodes.length} new nodes and ${newEdges.length} new edges`);
-			}
-			
-		} catch (error) {
-			console.error(`❌ [MindMap] Failed to expand concept "${nodeData.label}":`, error);
-			
-			// Fallback to mock expansion if AI fails
-			const mockSubConcepts = generateMockSubConcepts(nodeData);
-			
-			const newNodes = [...nodes];
-			const startX = expandingNode.position.x;
-			const startY = expandingNode.position.y;
-			
-			mockSubConcepts.forEach((concept, index) => {
-				const angle = (index * 2 * Math.PI) / mockSubConcepts.length;
-				const radius = Math.max(120, mockSubConcepts.length * 25); // Reduced and dynamic radius
-				const x = startX + Math.cos(angle) * radius;
-				const y = startY + Math.sin(angle) * radius;
+				// Track for potential rollback
+				const placeholderNodeIds = placeholderNodes.map(n => n.id);
+				const placeholderEdgeIds = placeholderEdges.map(e => e.id);
+				optimisticExpansions.set(nodeId, {
+					nodeIds: placeholderNodeIds,
+					edgeIds: placeholderEdgeIds
+				});
 				
-				newNodes.push({
-					id: `${nodeId}-fallback-${index}`,
-					type: 'conceptNode',
-					position: { x, y },
-					data: {
-						label: concept.label,
-						description: concept.description,
-						level: (nodeData.level || 0) + 1,
-						expandable: false,
-						parentId: nodeId,
-						fallback: true
-					}
-				});
-			});
-			
-			// Mark the expanded node as expanded
-			const nodeIndex = newNodes.findIndex(n => n.id === nodeId);
-			if (nodeIndex !== -1) {
-				newNodes[nodeIndex] = {
-					...newNodes[nodeIndex],
-					data: {
-						...newNodes[nodeIndex].data,
-						expanding: false,
-						expanded: true,
-						error: 'AI expansion failed'
-					}
-				};
+				// Add placeholders to the mind map
+				nodes = [...nodes, ...placeholderNodes];
+				edges = [...edges, ...placeholderEdges];
+				
+				console.log(`✅ [MindMap] Added ${placeholderNodes.length} placeholder nodes`);
+			},
+			async () => {
+				// Real Operation: Get AI expansion
+				console.log(`🤖 [MindMap] Getting real AI expansion for: "${nodeData.label}"`);
+				
+				const sessionState = get(session);
+				if (sessionState.id && currentTopicId) {
+					// Use enhanced AI service with persistence
+					const mindMapId = 'current-mindmap'; // TODO: Pass proper mindMapId
+					await expandConceptWithPersistence(nodeData.label, nodeData.parentTopic, mindMapId, nodeId);
+				} else {
+					// Fallback to basic expansion
+					const currentLanguage = get(aiLanguage);
+					const expansion = await expandConcept(nodeData.label, nodeData.parentTopic, currentLanguage);
+					console.log(`✅ [MindMap] AI expansion received with ${expansion.subConcepts.length} sub-concepts`);
+				
+					// Create real nodes and edges from AI expansion
+					const { nodes: realNodes, edges: realEdges } = createExpandedConceptNodes(
+						nodeId, 
+						expansion, 
+						expandingNode.position
+					);
+					
+					// Replace placeholders with real content
+					replacePlaceholdersWithReal(nodeId, realNodes, realEdges);
+					
+					console.log(`🎉 [MindMap] Replaced placeholders with ${realNodes.length} real nodes`);
+				}
+			},
+			() => {
+				// Rollback: Remove placeholders and reset node state
+				console.log(`🔄 [MindMap] Rolling back optimistic expansion for: ${nodeId}`);
+				
+				// Remove placeholder nodes
+				removePlaceholders(nodeId);
+				
+				// Reset node state
+				nodes = nodes.map(node => 
+					node.id === nodeId 
+						? { ...node, data: { ...node.data, expanded: false, expanding: false } }
+						: node
+				);
 			}
-			
-			nodes = newNodes;
-			
-			// Add connecting edges
-			const newEdges = [...edges];
-			
-			mockSubConcepts.forEach((_, index) => {
-				newEdges.push({
-					id: `edge-${nodeId}-fallback-${index}`,
-					source: nodeId,
-					target: `${nodeId}-fallback-${index}`,
-					type: 'smoothstep',
-					animated: false,
-					style: 'stroke: #9ca3af; stroke-width: 1.5;'
-				});
-			});
-			
-			edges = newEdges;
-		}
+		);
 	};
 	
 	const generateMockSubConcepts = (parentData: any) => {
@@ -263,10 +333,10 @@
 	// Handle node clicks for navigation to content pages
 	const handleNodeClick = (event: CustomEvent) => {
 		const node = event.detail.node;
-		console.log('Node clicked:', node);
+		console.log('🔗 [MindMap] Node clicked for navigation:', node.data.label);
 		
-		// TODO: Navigate to content page
-		// goto(`/topic/${node.id}?context=${encodeURIComponent(node.data.label)}`);
+		// Navigate to dedicated topic page using existing navigation function
+		handleNavigateToContent(node.data);
 	};
 	
 	// Handle node expansion clicks
@@ -277,11 +347,6 @@
 
 
 	// Handle closing panels
-	const handleCloseDetails = () => {
-		detailsPanelOpen = false;
-		selectedNodeData = null;
-	};
-
 	const handleCloseChat = () => {
 		chatPanelOpen = false;
 		chatTopic = '';
@@ -311,10 +376,10 @@
 	{#if data.isStreaming}
 		<!-- Streaming progress indicator -->
 		<div class="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
-			<div class="bg-white/95 backdrop-blur-sm border border-zinc-200 rounded-lg px-4 py-2 shadow-lg">
+			<div class="bg-white/95 backdrop-blur-sm border border-zinc-200 rounded-lg px-4 py-3 shadow-lg">
 				<div class="flex items-center space-x-3">
-					<div class="w-4 h-4 bg-zinc-100 rounded-full flex items-center justify-center">
-						<div class="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+					<div class="flex-shrink-0">
+						<Loader2 class="h-5 w-5 animate-spin text-blue-600" />
 					</div>
 					<span class="text-sm font-medium text-zinc-900">
 						{data.currentStep || 'Building mind map...'}
@@ -354,25 +419,6 @@
 	</SvelteFlow>
 </div>
 
-<!-- Node Details Panel -->
-<NodeDetailsPanel 
-	open={detailsPanelOpen}
-	nodeData={selectedNodeData}
-	onclose={handleCloseDetails}
-	onstartchat={(e: CustomEvent) => {
-		chatTopic = e.detail.topic;
-		chatPanelOpen = true;
-		detailsPanelOpen = false;
-	}}
-	onexploremore={(e: CustomEvent) => {
-		console.log('Explore more:', e.detail.nodeData);
-		// TODO: Implement explore more functionality
-	}}
-	onnavigate={(e: CustomEvent) => {
-		console.log('Navigate to:', e.detail.topic);
-		// TODO: Implement navigation to related topics
-	}}
-/>
 
 <!-- Chat Panel -->
 <ChatPanel 

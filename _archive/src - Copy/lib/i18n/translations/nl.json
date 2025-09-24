@@ -1,0 +1,98 @@
+{
+  "navigation": {
+    "explore": "Verkennen",
+    "history": "Geschiedenis",
+    "about": "Over",
+    "settings": "Instellingen",
+    "test": "Test",
+    "start_learning": "Begin met Leren",
+    "explore_topics": "Onderwerpen Verkennen",
+    "ai_powered_learning": "AI-Aangedreven Leren"
+  },
+  "landing": {
+    "title": "Transformeer Je Nieuwsgierigheid in Kennis",
+    "subtitle": "Verken elk onderwerp door middel van AI-aangedreven interactieve mindmaps. Verander je vragen in uitgebreid begrip.",
+    "explore_topic": "Onderwerp Verkennen",
+    "analyze_url": "URL Analyseren",
+    "upload_image": "Afbeelding Uploaden",
+    "trusted_by": "Vertrouwd door 10.000+ leerlingen",
+    "rating": "4,9/5 beoordeling"
+  },
+  "topic_input": {
+    "placeholder": "Voer een onderwerp in dat je wilt verkennen...",
+    "button": "Verken met AI",
+    "loading": "Mindmap Genereren...",
+    "popular_topics": "Populaire onderwerpen om te verkennen:",
+    "ai_powered_analysis": "AI-Aangedreven Analyse",
+    "ai_powered_analysis_desc": "Krijg uitgebreide uiteenzettingen van elk onderwerp",
+    "interactive_mind_maps": "Interactieve Mindmaps",
+    "interactive_mind_maps_desc": "Verken verbindingen visueel",
+    "deep_learning": "Diepgaand Leren",
+    "deep_learning_desc": "Duik dieper in elk concept",
+    "suggestions": {
+      "machine_learning": "Machine Learning",
+      "climate_change": "Klimaatverandering",
+      "ancient_rome": "Oude Rome",
+      "quantum_physics": "Kwantumfysica",
+      "renaissance_art": "Renaissance Kunst",
+      "building_websites": "Websites Bouwen",
+      "human_psychology": "Menselijke Psychologie",
+      "space_exploration": "Ruimteverkenning",
+      "solar_system": "Het Zonnestelsel",
+      "world_war_ii": "Tweede Wereldoorlog",
+      "human_anatomy": "Menselijke Anatomie",
+      "elementary_math": "Basiswiskunde"
+    }
+  },
+  "url_input": {
+    "placeholder": "Voer een URL in om te analyseren...",
+    "button": "Analyseer met AI",
+    "loading": "Inhoud Analyseren..."
+  },
+  "settings": {
+    "title": "Instellingen",
+    "subtitle": "Configureer je voorkeuren",
+    "settings_saved": "Instellingen opgeslagen",
+    "language_settings": "Taalinstellingen",
+    "language_settings_desc": "Configureer hoe AI je invoer interpreteert en reageert",
+    "interface_language": "Interface Taal",
+    "interface_language_desc": "Taal voor knoppen, menu's en interface tekst",
+    "ai_language": "AI Taal",
+    "ai_language_desc": "Taal voor AI om je invoer te begrijpen en mindmaps en inhoud te genereren",
+    "save_settings": "Instellingen Opslaan",
+    "saving": "Opslaan...",
+    "reset_to_defaults": "Terug naar Standaard",
+    "how_language_settings_work": "Hoe Taalinstellingen Werken",
+    "interface_changes": "Interface: Verandert menu en knop tekst",
+    "ai_language_desc_full": "AI Taal: Taal voor het begrijpen van invoer en het genereren van inhoud",
+    "existing_content": "Bestaande inhoud: Blijft in oorspronkelijke taal",
+    "new_explorations": "Nieuwe verkenningen: Gebruiken de geselecteerde AI-taal",
+    "supported_languages": "Ondersteunde Talen"
+  },
+  "explore": {
+    "back_to_home": "Terug naar Home",
+    "analyzing": "Analyseren...",
+    "generating_mind_map": "Mindmap genereren...",
+    "mind_map_complete": "Mindmap compleet!",
+    "error_analyzing": "Fout bij analyseren van onderwerp",
+    "try_again": "Probeer opnieuw"
+  },
+  "footer": {
+    "copyright": "© 2025 Explore.fyi. Nieuwsgierigheid transformeren in kennis.",
+    "privacy": "Privacy",
+    "terms": "Voorwaarden",
+    "contact": "Contact"
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Fout",
+    "success": "Succes",
+    "cancel": "Annuleren",
+    "save": "Opslaan",
+    "reset": "Resetten",
+    "back": "Terug",
+    "next": "Volgende",
+    "previous": "Vorige",
+    "close": "Sluiten"
+  }
+}

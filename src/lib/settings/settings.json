@@ -1,0 +1,54 @@
+{
+  "_comment": "exploring.fyi Application Settings - Controls AI generation, mindmap layout, and UI behavior",
+  
+  "max-mindmap-nodes": 4,
+  "_max-mindmap-nodes_comment": "Maximum number of concept nodes generated around main topic in mindmap. Used in: MindMap.svelte createPlaceholderNodes(), affects initial topic analysis and visual layout complexity",
+  
+  "max-chapters-generated": 5,
+  "_max-chapters-generated_comment": "Maximum chapters generated when creating Table of Contents for a topic. Used in: generate-toc APIs, tocGeneration.ts, affects learning content depth and generation time",
+  
+  "max-paragraphs-generated": 5,
+  "_max-paragraphs-generated_comment": "Maximum paragraphs per chapter in ToC structure. Used in: ToC generation prompts and validation, affects content granularity within chapters",
+  
+  "max-words-per-paragraph": 350,
+  "_max-words-per-paragraph_comment": "Target word count for each generated paragraph. Used in: generate-paragraph API, paragraph generation prompts, affects content depth per section",
+  
+  "ai-model-temperature": 0.7,
+  "_ai-model-temperature_comment": "AI creativity/randomness (0.0=deterministic, 1.0=creative). Used in: all Genkit AI generate() calls across APIs, affects content variation and consistency",
+  
+  "ai-max-output-tokens": 3000,
+  "_ai-max-output-tokens_comment": "Maximum tokens AI can generate per request. Used in: all Genkit AI configurations, prevents truncation and controls response length",
+  
+  "mindmap-node-radius": 180,
+  "_mindmap-node-radius_comment": "Distance from parent node when placing child nodes in mindmap. Used in: MindMap.svelte createPlaceholderNodes(), affects visual spacing and layout",
+  
+  "mindmap-node-width": 256,
+  "_mindmap-node-width_comment": "Width of mindmap nodes for collision detection and spacing calculations. Used in: topicAnalysis.ts calculateSafeRadius(), prevents node overlaps",
+  
+  "mindmap-base-radius": 300,
+  "_mindmap-base-radius_comment": "Base radius for initial topic breakdown node positioning. Used in: topicAnalysis.ts createMindMapFromBreakdown(), affects overall mindmap size",
+  
+  "mindmap-min-radius": 100,
+  "_mindmap-min-radius_comment": "Minimum radius for node positioning to ensure readability. Used in: topicAnalysis.ts calculateSafeRadius(), prevents nodes from being too close to center",
+  
+  "mindmap-max-radius": 320,
+  "_mindmap-max-radius_comment": "Maximum radius for node positioning to keep mindmap compact. Used in: topicAnalysis.ts calculateSafeRadius(), prevents mindmap from becoming too large",
+  
+  "default-difficulty": "intermediate",
+  "_default-difficulty_comment": "Default learning difficulty level (beginner/intermediate/advanced). Used in: AI generation prompts, affects content complexity and language used",
+  
+  "default-language": "en",
+  "_default-language_comment": "Default content language code. Used in: topic analysis and content generation when no language specified, affects prompt localization",
+  
+  "api-timeout-ms": 30000,
+  "_api-timeout-ms_comment": "API request timeout in milliseconds. Used in: test files and potentially fetch configurations, prevents hanging requests",
+  
+  "pagination-limit": 20,
+  "_pagination-limit_comment": "Default number of items per page in lists. Used in: database queries in topics.ts, mindMaps.ts, affects query performance and UI pagination",
+  
+  "search-result-limit": 10,
+  "_search-result-limit_comment": "Maximum search results returned. Used in: search functions in database services, affects search performance and result relevance",
+  
+  "recent-topics-limit": 50,
+  "_recent-topics-limit_comment": "Maximum recent topics shown in history. Used in: topics.ts getRecentTopics(), affects history page performance and storage"
+}

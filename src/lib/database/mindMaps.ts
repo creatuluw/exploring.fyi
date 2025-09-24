@@ -43,9 +43,25 @@ export class MindMapsService {
     layoutData?: Record<string, any>
   ): Promise<MindMap> {
     try {
+      // Get topic to extract its slug for mindmap slug generation
+      const topic = await supabase
+        .from('topics')
+        .select('slug')
+        .eq('id', topicId)
+        .single();
+
+      let mindMapSlug = '';
+      if (topic.data?.slug) {
+        mindMapSlug = await dbHelpers.generateUniqueMindMapSlug(topic.data.slug);
+      } else {
+        // Fallback: generate from topicId
+        mindMapSlug = `mindmap-${Date.now()}`;
+      }
+
       const mindMapData: MindMapInsert = {
         id: dbHelpers.generateId(),
         topic_id: topicId,
+        slug: mindMapSlug,
         nodes: nodes as Record<string, any>[],
         edges: edges as Record<string, any>[],
         layout_data: layoutData || null
@@ -196,6 +212,13 @@ export class MindMapsService {
       console.error('Failed to get mind map by ID:', error);
       return null;
     }
+  }
+
+  /**
+   * Get mind map by slug
+   */
+  static async getMindMapBySlug(slug: string): Promise<MindMap | null> {
+    return await dbHelpers.getMindMapBySlug(slug);
   }
 
   /**

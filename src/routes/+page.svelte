@@ -1,18 +1,20 @@
 <script lang="ts">
-	import { Brain, Sparkles, ArrowRight, Users, Star, Zap } from 'lucide-svelte';
+	import { Brain, Sparkles, ArrowRight, Users, Star, Zap, Upload } from 'lucide-svelte';
 	import TopicInput from '$lib/components/TopicInput.svelte';
 	import UrlInput from '$lib/components/UrlInput.svelte';
+	import ImageInput from '$lib/components/ImageInput.svelte';
+	import { t } from '$lib/i18n/index.js';
 	
-	let activeTab = $state<'topic' | 'url'>('topic');
+	let activeTab = $state<'topic' | 'url' | 'image'>('topic');
 	
-	const setActiveTab = (tab: 'topic' | 'url') => {
+	const setActiveTab = (tab: 'topic' | 'url' | 'image') => {
 		activeTab = tab;
 	};
 </script>
 
 <svelte:head>
-	<title>Explore.fyi - Transform Your Curiosity Into Knowledge</title>
-	<meta name="description" content="Explore any topic through AI-powered interactive mind maps. Turn your questions into comprehensive understanding with Explore.fyi's intelligent learning platform." />
+	<title>Explore.fyi - {$t('landing.title')}</title>
+	<meta name="description" content="{$t('landing.subtitle')}" />
 </svelte:head>
 
 <!-- Hero Section -->
@@ -20,17 +22,12 @@
 	<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 		<div class="text-center space-y-8">
 			<!-- Hero Headline -->
-			<div class="space-y-6">
+			<div class="space-y-6 max-w-2xl mx-auto">
 				<h1 class="h1">
-					Transform Your
-					<span class="text-transparent bg-clip-text bg-gradient-to-r from-zinc-900 via-zinc-700 to-zinc-900">
-						Curiosity <br />
-					</span>
-					Into Knowledge
+					{$t('landing.title')}
 				</h1>
-				<p class="text-lead max-w-3xl mx-auto">
-					Explore any topic through AI-powered interactive mind maps.<br /> 
-					Turn your questions into comprehensive understanding.
+				<p class="text-lead">
+					{$t('landing.subtitle')}
 				</p>
 			</div>
 			
@@ -38,13 +35,13 @@
 			<div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-8 text-zinc-500">
 				<div class="flex items-center space-x-2">
 					<Users class="h-4 w-4" />
-					<span class="text-sm font-inter">Trusted by 10,000+ learners</span>
+					<span class="text-sm font-inter">{$t('landing.trusted_by')}</span>
 				</div>
 				<div class="flex items-center space-x-1">
 					{#each Array(5) as _}
 						<Star class="h-4 w-4 fill-yellow-400 text-yellow-400" />
 					{/each}
-					<span class="text-sm font-inter ml-2">4.9/5 rating</span>
+					<span class="text-sm font-inter ml-2">{$t('landing.rating')}</span>
 				</div>
 			</div>
 		</div>
@@ -53,7 +50,7 @@
 
 <!-- Input Section -->
 <section class="pt-8 pb-20 bg-white">
-	<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+	<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 		<!-- Tab Navigation -->
 		<div class="flex justify-center mb-12">
 			<div class="flex bg-zinc-100 rounded-lg p-1 border border-zinc-200">
@@ -63,7 +60,7 @@
 				>
 					<div class="flex items-center space-x-2">
 						<Brain class="h-4 w-4" />
-						<span>Explore Topic</span>
+						<span>{$t('landing.explore_topic')}</span>
 					</div>
 				</button>
 				<button
@@ -72,7 +69,16 @@
 				>
 					<div class="flex items-center space-x-2">
 						<Sparkles class="h-4 w-4" />
-						<span>Analyze URL</span>
+						<span>{$t('landing.analyze_url')}</span>
+					</div>
+				</button>
+				<button
+					onclick={() => setActiveTab('image')}
+					class="px-6 py-3 rounded-md font-medium text-sm transition-all duration-200 {activeTab === 'image' ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200' : 'text-zinc-600 hover:text-zinc-900'}"
+				>
+					<div class="flex items-center space-x-2">
+						<Upload class="h-4 w-4" />
+						<span>{$t('landing.upload_image')}</span>
 					</div>
 				</button>
 			</div>
@@ -82,8 +88,10 @@
 		<div class="bg-zinc-50 border border-zinc-200 rounded-xl p-8 lg:p-12">
 			{#if activeTab === 'topic'}
 				<TopicInput />
-			{:else}
+			{:else if activeTab === 'url'}
 				<UrlInput />
+			{:else if activeTab === 'image'}
+				<ImageInput />
 			{/if}
 		</div>
 	</div>

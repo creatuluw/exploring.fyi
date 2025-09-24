@@ -4,64 +4,231 @@
 	import { ArrowLeft, Brain, ExternalLink, Loader2 } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
 	import MindMap from '$lib/components/MindMap.svelte';
-	import { 
-		analyzeTopic, 
-		createMindMapFromBreakdown, 
-		analyzeTopicStreaming, 
-		analyzeUrlStreaming,
-		type StreamingNodeData 
-	} from '$lib/services/topicAnalysis.js';
+	import InlineNodeDetailsPanel from '$lib/components/InlineNodeDetailsPanel.svelte';
+import { 
+	analyzeTopic, 
+	createMindMapFromBreakdown, 
+	analyzeTopicStreaming, 
+	analyzeUrlStreaming,
+	type StreamingNodeData 
+} from '$lib/services/topicAnalysis.js';
+import { aiLanguage } from '$lib/stores/language.js';
 	import { 
 		analyzeTopicStreamingWithPersistence,
-		analyzeUrlStreamingWithPersistence 
+		analyzeUrlStreamingWithPersistence,
+		loadTopicMindMap 
 	} from '$lib/services/topicAnalysisWithPersistence.js';
-	import { analyzeUrl, createMindMapFromUrlAnalysis, validateUrl } from '$lib/services/urlAnalysis.js';
+import { TopicsService } from '$lib/database/topics.js';
+import { analyzeUrl, createMindMapFromUrlAnalysis, validateUrl } from '$lib/services/urlAnalysis.js';
+import { ErrorRecovery } from '$lib/utils/errorRecovery.js';
+import DuplicateTopicModal from '$lib/components/DuplicateTopicModal.svelte';
+import { get } from 'svelte/store';
+import { isSessionReady, session } from '$lib/stores/session.js';
 
 	// Reactive variables for page state
 	let topic = $state('');
 	let url = $state('');
+	let displayTitle = $state(''); // The actual title to show in the header
 	let isLoading = $state(true);
 	let error = $state('');
 	let mindMapData = $state<any>(null);
 	let hasNodes = $state(false); // Track if we have any nodes to show
 	let hasInitialized = $state(false); // Prevent infinite loops
+	
+	// Duplicate topic detection state
+	let showDuplicateModal = $state(false);
+	let duplicateTopicInfo = $state<any>(null);
+	let pendingAnalysisType = $state<'topic' | 'url' | null>(null);
+	let forceNewExploration = $state(false);
+	
+	// Drawer state
+	let detailsPanelOpen = $state(false);
+	let selectedNodeData = $state<any>(null);
 
-	// Extract parameters from URL
+	// Extract parameters from URL and initialize immediately
 	$effect(() => {
 		const searchParams = $page.url.searchParams;
 		const newTopic = searchParams.get('topic') || '';
 		const newUrl = searchParams.get('url') || '';
+		const resumeFlag = searchParams.get('resume') === 'true';
 		
 		// Only initialize if parameters actually changed and we haven't initialized yet
 		if ((newTopic !== topic || newUrl !== url) || !hasInitialized) {
 			topic = newTopic;
 			url = newUrl;
 			
-			// Initialize mind map when parameters change
-			if (topic || url) {
+			// Set initial display title
+			if (newTopic && !resumeFlag) {
+				// For new topics, the topic parameter is the title
+				displayTitle = newTopic;
+			} else if (newUrl) {
+				// For URLs, show the domain
+				displayTitle = new URL(newUrl).hostname;
+			} else if (newTopic && resumeFlag) {
+				// For resumed topics, we'll fetch the actual title in initializeMindMap
+				displayTitle = 'Loading...';
+			}
+			
+			// Initialize mind map immediately when parameters change
+			if ((topic || url)) {
 				hasInitialized = true;
-				initializeMindMap();
+				initializeMindMap(resumeFlag);
 			}
 		}
 	});
 
-	const initializeMindMap = async () => {
-		console.log('🚀 [UI] Starting progressive mind map initialization...');
-		isLoading = true;
-		hasNodes = false;
+const initializeMindMap = async (resume = false) => {
+		console.log('🚀 [UI] Starting mind map initialization...');
+		
+		// Reset state and show loading mind map immediately
+		hasNodes = true; // Show content area immediately
+		isLoading = false; // Don't show loading spinner
 		error = '';
-		mindMapData = null;
+		
+		// Set initial mind map with loading state
+		mindMapData = {
+			nodes: [{
+				id: 'loading',
+				type: 'topicNode',
+				position: { x: 400, y: 300 },
+				data: {
+					label: displayTitle || 'Loading...',
+					description: 'Generating mind map...',
+					level: 0,
+					isMainTopic: true,
+					isLoading: true
+				}
+			}],
+			edges: [],
+			isStreaming: true,
+			currentStep: 'Initializing...'
+		};
 		
 		try {
-			if (topic) {
-				console.log(`📝 [UI] Processing topic with persistence: "${topic}"`);
-				await analyzeTopicStreamingWithPersistence(topic, handleStreamingProgress);
-			} else if (url) {
-				console.log(`🔗 [UI] Processing URL with persistence: "${url}"`);
-				await analyzeUrlStreamingWithPersistence(url, handleStreamingProgress);
-			}
-			
-			console.log('✅ [UI] Progressive mind map generation completed successfully');
+			// Use ErrorRecovery for robust error handling
+			await ErrorRecovery.withAIServiceRecovery(
+				`mindmap-init-${topic || url}`,
+				() => {
+					// Initial loading state already applied above
+				},
+				async () => {
+					// Create lifecycle-bound AbortController so navigation/cancel stops work
+					const controller = new AbortController();
+					const signal = controller.signal;
+					// Cancel on page unload/navigation (best-effort in SPA)
+					addEventListener('beforeunload', () => controller.abort(), { once: true });
+
+					if (topic) {
+						if (resume) {
+							// Topic parameter could be either a topic ID or slug - try to load existing mind map
+							console.log(`🔄 [UI] Resuming existing topic: "${topic}"`);
+							
+							let topicDetails = null;
+							let existingMindMap = null;
+							
+							// First try to load by topic ID (UUID format)
+							if (topic.length > 20 && topic.includes('-')) {
+								console.log(`🔍 [UI] Attempting to load by UUID: ${topic}`);
+								topicDetails = await TopicsService.getTopicById(topic);
+								if (topicDetails) {
+									existingMindMap = await loadTopicMindMap(topic);
+								}
+							}
+							
+							// If not found, try to load by slug (session context required)
+							if (!topicDetails) {
+								const sessionState = get(session);
+								if (sessionState.id) {
+									console.log(`🔍 [UI] Attempting to load by slug: ${topic}`);
+									const { loadTopicBySlug } = await import('$lib/services/topicAnalysisWithPersistence.js');
+									topicDetails = await loadTopicBySlug(sessionState.id, topic);
+									if (topicDetails && topicDetails.id) {
+										existingMindMap = await loadTopicMindMap(topicDetails.id);
+									}
+								} else {
+									console.log(`⏳ [UI] Session not ready yet, waiting for session before loading by slug`);
+									// Wait for session to be ready if we need to load by slug
+									await new Promise((resolve) => {
+										const unsubscribe = isSessionReady.subscribe((ready) => {
+											if (ready) {
+												unsubscribe();
+												resolve(undefined);
+											}
+										});
+									});
+									
+									const sessionState = get(session);
+									if (sessionState.id) {
+										console.log(`🔍 [UI] Session ready, attempting to load by slug: ${topic}`);
+										const { loadTopicBySlug } = await import('$lib/services/topicAnalysisWithPersistence.js');
+										topicDetails = await loadTopicBySlug(sessionState.id, topic);
+										if (topicDetails && topicDetails.id) {
+											existingMindMap = await loadTopicMindMap(topicDetails.id);
+										}
+									}
+								}
+							}
+							
+							if (existingMindMap && topicDetails) {
+								console.log(`✅ [UI] Loaded existing mind map with ${existingMindMap.nodes.length} nodes`);
+								displayTitle = topicDetails.title;
+								handleStreamingProgress(existingMindMap);
+							} else if (topicDetails) {
+								// Fallback: create new mind map for existing topic
+								console.log(`⚠️ [UI] No mind map found for topic: ${topic}, creating new one`);
+								displayTitle = topicDetails.title;
+								console.log(`📝 [UI] Found topic details, creating new mind map for: "${topicDetails.title}"`);
+								const result = await analyzeTopicStreamingWithPersistence(topicDetails.title, handleStreamingProgress, { forceNew: forceNewExploration }, signal);
+								
+								if (typeof result === 'object' && result.isDuplicate) {
+									handleDuplicateDetected(result.existingTopic, 'topic');
+									return;
+								}
+							} else {
+								throw new Error('Topic not found');
+							}
+						} else {
+							// Topic is a topic name - start analysis immediately, session will be handled internally
+							console.log(`📝 [UI] Processing new topic: "${topic}"`);
+							
+							// Check if session is ready, if not, the persistence service will wait
+							const sessionReady = $isSessionReady;
+							if (!sessionReady) {
+								console.log(`⏳ [UI] Session not ready yet, starting mind map generation while session initializes`);
+							}
+							
+							const result = await analyzeTopicStreamingWithPersistence(topic, handleStreamingProgress, { forceNew: forceNewExploration }, signal);
+							
+							if (typeof result === 'object' && result.isDuplicate) {
+								handleDuplicateDetected(result.existingTopic, 'topic');
+								return;
+							}
+						}
+					} else if (url) {
+						console.log(`🔗 [UI] Processing URL: "${url}"`);
+						
+						// Check if session is ready, if not, the persistence service will wait
+						const sessionReady = $isSessionReady;
+						if (!sessionReady) {
+							console.log(`⏳ [UI] Session not ready yet, starting mind map generation while session initializes`);
+						}
+						
+						const result = await analyzeUrlStreamingWithPersistence(url, handleStreamingProgress, { forceNew: forceNewExploration }, signal);
+						
+						if (typeof result === 'object' && result.isDuplicate) {
+							handleDuplicateDetected(result.existingTopic, 'url');
+							return;
+						}
+					}
+					
+					console.log('✅ [UI] Progressive mind map generation completed successfully');
+				},
+				() => {
+					// Rollback: Show error state
+					hasNodes = false;
+					isLoading = false;
+				}
+			);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to generate mind map';
 			
@@ -70,6 +237,8 @@
 				error = 'Unable to connect to AI service. Please check your internet connection and try again.';
 			} else if (errorMessage.includes('API key') || errorMessage.includes('authentication')) {
 				error = 'AI service configuration error. Please check the setup.';
+			} else if (errorMessage.includes('Topic not found')) {
+				error = 'The requested topic could not be found. It may have been deleted.';
 			} else {
 				error = errorMessage;
 			}
@@ -91,11 +260,8 @@
 			currentStep: streamData.currentStep
 		};
 
-		// Show mind map as soon as we have nodes
-		if (streamData.nodes.length > 0 && !hasNodes) {
-			hasNodes = true;
-			isLoading = false; // Stop showing initial loading spinner
-		}
+		// Ensure we show the mind map
+		hasNodes = true;
 
 		// Final completion
 		if (streamData.isComplete) {
@@ -109,7 +275,8 @@
 		try {
 			// Use AI service to analyze the topic
 			console.log(`🔄 [UI] Calling analyzeTopic service...`);
-			const breakdown = await analyzeTopic(topicName);
+			const currentLanguage = get(aiLanguage);
+			const breakdown = await analyzeTopic(topicName, currentLanguage);
 			
 			console.log(`🗺️ [UI] Creating mind map structure from breakdown...`);
 			// Create mind map structure from AI analysis
@@ -157,7 +324,8 @@
 			
 			// Use AI service to analyze the URL
 			console.log(`🔄 [UI] Calling analyzeUrl service...`);
-			const analysis = await analyzeUrl(urlString);
+			const currentLanguage = get(aiLanguage);
+			const analysis = await analyzeUrl(urlString, currentLanguage);
 			
 			console.log(`🗺️ [UI] Creating mind map structure from URL analysis...`);
 			// Create mind map structure from AI analysis
@@ -195,11 +363,106 @@
 	const handleBackToHome = () => {
 		goto('/');
 	};
+
+	// Drawer handlers
+	const handleCloseDetails = () => {
+		detailsPanelOpen = false;
+		selectedNodeData = null;
+	};
+
+	const handleStartChat = (event: CustomEvent) => {
+		// TODO: Implement chat functionality
+		console.log('Start chat for:', event.detail.topic);
+	};
+
+	// Duplicate topic handlers
+	function handleDuplicateDetected(existingTopic: any, analysisType: 'topic' | 'url') {
+		console.log('🔄 [UI] Duplicate topic detected, showing modal');
+		duplicateTopicInfo = existingTopic;
+		pendingAnalysisType = analysisType;
+		showDuplicateModal = true;
+		
+		// Reset UI state to show the modal properly
+		hasNodes = false;
+		isLoading = false;
+	}
+
+	async function handleContinuePrevious() {
+		console.log('🔄 [UI] User chose to continue previous exploration');
+		
+		if (duplicateTopicInfo) {
+			// Small delay to show loading state before navigation
+			await new Promise(resolve => setTimeout(resolve, 100));
+			
+			try {
+				// Generate slug from topic title for navigation (temporary until migration is run)
+				const { dbHelpers } = await import('$lib/database/supabase.js');
+				const topic = duplicateTopicInfo;
+				const topicSlug = dbHelpers.generateSlug(topic.title);
+				
+				// For now, navigate to explore page with generated slug-like URL
+				// TODO: Once migration is run, this will use actual mindmap slugs
+				window.location.href = `/explore?topic=${topicSlug}&resume=true`;
+			} catch (error) {
+				console.error('❌ [Explore] Error generating slug for navigation:', error);
+				// Fallback to ID-based navigation
+				window.location.href = `/explore?topic=${duplicateTopicInfo.id}&resume=true`;
+			}
+		}
+	}
+
+	async function handleStartNewExploration() {
+		console.log('🆕 [UI] User chose to start new exploration');
+		
+		// Set flag to force new exploration and restart the analysis
+		forceNewExploration = true;
+		hasInitialized = false;
+		
+		// Close modal and show loading state immediately
+		showDuplicateModal = false;
+		
+		// Show immediate loading state
+		hasNodes = true;
+		isLoading = false;
+		error = '';
+		
+		// Set initial mind map with loading state
+		mindMapData = {
+			nodes: [{
+				id: 'loading',
+				type: 'topicNode',
+				position: { x: 400, y: 300 },
+				data: {
+					label: displayTitle || 'Loading...',
+					description: 'Starting fresh exploration...',
+					level: 0,
+					isMainTopic: true,
+					isLoading: true
+				}
+			}],
+			edges: [],
+			isStreaming: true,
+			currentStep: 'Starting fresh exploration...'
+		};
+		
+		// Start the mind map initialization
+		await initializeMindMap();
+	}
+
+	function handleCloseDuplicateModal() {
+		console.log('❌ [UI] User closed duplicate modal');
+		showDuplicateModal = false;
+		duplicateTopicInfo = null;
+		pendingAnalysisType = null;
+		
+		// Navigate back to home or previous page
+		handleBackToHome();
+	}
 </script>
 
 <svelte:head>
-	<title>Explore {topic || 'Content'} - Explore.fyi</title>
-	<meta name="description" content="Interactive mind map exploration of {topic || 'web content'} powered by AI" />
+	<title>Explore {displayTitle || 'Content'} - Explore.fyi</title>
+	<meta name="description" content="Interactive mind map exploration of {displayTitle || 'web content'} powered by AI" />
 </svelte:head>
 
 <div class="min-h-screen bg-zinc-50">
@@ -216,17 +479,14 @@
 				</button>
 				
 				<div class="flex items-center space-x-4">
-					{#if topic}
+					{#if displayTitle}
 						<div class="flex items-center space-x-2">
-							<Brain class="h-4 w-4 text-zinc-500" />
-							<span class="text-sm font-medium text-zinc-900">{topic}</span>
-						</div>
-					{:else if url}
-						<div class="flex items-center space-x-2">
-							<ExternalLink class="h-4 w-4 text-zinc-500" />
-							<span class="text-sm font-medium text-zinc-900 truncate max-w-xs">
-								{new URL(url).hostname}
-							</span>
+							{#if topic}
+								<Brain class="h-4 w-4 text-zinc-500" />
+							{:else if url}
+								<ExternalLink class="h-4 w-4 text-zinc-500" />
+							{/if}
+							<span class="text-sm font-medium text-zinc-900">{displayTitle}</span>
 						</div>
 					{/if}
 				</div>
@@ -234,33 +494,11 @@
 		</div>
 	</div>
 
-	<!-- Main content area -->
-	<main class="relative">
-		{#if isLoading && !hasNodes}
-			<!-- Initial loading state - show until first nodes appear -->
-			<div class="flex flex-col items-center justify-center h-[calc(100vh-140px)]">
-				<div class="text-center space-y-6">
-					<div class="flex justify-center">
-						<div class="w-16 h-16 bg-zinc-100 rounded-full flex items-center justify-center">
-							<Loader2 class="h-8 w-8 text-zinc-600 animate-spin" />
-						</div>
-					</div>
-					<div class="space-y-2">
-						<h2 class="text-xl font-semibold text-zinc-900">
-							{topic ? 'Analyzing Topic' : 'Processing Content'}
-						</h2>
-						<p class="text-zinc-600 max-w-md">
-							{topic 
-								? `AI is breaking down "${topic}" into connected concepts...`
-								: 'AI is extracting and organizing key information...'
-							}
-						</p>
-					</div>
-				</div>
-			</div>
-		{:else if error}
+	<!-- Main content area with flex layout for drawer -->
+	<main class="relative h-[calc(100vh-140px)]">
+		{#if error}
 			<!-- Error state -->
-			<div class="flex flex-col items-center justify-center h-[calc(100vh-140px)]">
+			<div class="flex flex-col items-center justify-center h-full">
 				<div class="text-center space-y-6 max-w-md">
 					<div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
 						<ExternalLink class="h-8 w-8 text-red-600" />
@@ -292,11 +530,56 @@
 					</div>
 				</div>
 			</div>
+		{:else if isLoading || (!hasNodes && !mindMapData)}
+			<!-- Initial loading state -->
+			<div class="flex flex-col items-center justify-center h-full">
+				<div class="text-center space-y-6 max-w-md">
+					<div class="flex items-center justify-center space-x-3 text-zinc-600 mb-4">
+						<Loader2 class="h-8 w-8 animate-spin text-blue-600" />
+						<Brain class="h-8 w-8 text-zinc-400" />
+					</div>
+					<div class="space-y-2">
+						<h2 class="text-xl font-semibold text-zinc-900">
+							Generating Mind Map
+						</h2>
+						<p class="text-zinc-600">
+							Setting up your learning exploration for "{displayTitle}"...
+						</p>
+					</div>
+				</div>
+			</div>
 		{:else if hasNodes && mindMapData}
-			<!-- Mind map visualization - shown as soon as nodes are available -->
-			<div class="h-[calc(100vh-140px)]">
-				<MindMap data={mindMapData} />
+			<!-- Mind map visualization with push-style drawer -->
+			<div class="relative h-full overflow-hidden">
+				<!-- Mind map canvas - gets pushed left when drawer opens -->
+				<div 
+					class="absolute inset-0 transition-transform duration-300 ease-in-out {detailsPanelOpen ? '-translate-x-1/2' : ''}"
+				>
+					<MindMap data={mindMapData} bind:detailsPanelOpen bind:selectedNodeData />
+				</div>
+				
+				<!-- Push-style details drawer - slides in from right -->
+				<div 
+					class="absolute top-0 right-0 w-1/2 h-full bg-white border-l border-zinc-200 transition-transform duration-300 ease-in-out {!detailsPanelOpen ? 'translate-x-full' : ''}"
+				>
+					<InlineNodeDetailsPanel 
+						open={detailsPanelOpen}
+						nodeData={selectedNodeData}
+						onclose={handleCloseDetails}
+						onstartchat={handleStartChat}
+					/>
+				</div>
 			</div>
 		{/if}
 	</main>
 </div>
+
+<!-- Duplicate Topic Modal -->
+<DuplicateTopicModal
+	bind:open={showDuplicateModal}
+	topicTitle={displayTitle || ''}
+	existingTopic={duplicateTopicInfo}
+	onContinue={handleContinuePrevious}
+	onStartNew={handleStartNewExploration}
+	onClose={handleCloseDuplicateModal}
+/>

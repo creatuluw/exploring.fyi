@@ -5,6 +5,7 @@
 
 import type { TopicBreakdown, ConceptExpansion } from '../types/index.js';
 import { calculateSafeRadius, getOptimalHandles } from '../utils/index.js';
+import { MINDMAP_NODE_WIDTH, MINDMAP_MIN_RADIUS, MINDMAP_MAX_RADIUS } from '../settings/index.js';
 
 // Types for streaming analysis
 export interface StreamingNodeData {
@@ -22,8 +23,10 @@ export interface StreamingCallback {
  * Streaming version of topic analysis that progressively builds the mind map
  */
 export async function analyzeTopicStreaming(
-  topic: string, 
-  onProgress: StreamingCallback
+  topic: string,
+  onProgress: StreamingCallback,
+  language?: string,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   console.log(`🔍 [AI Streaming] Starting progressive topic analysis for: "${topic}"`);
   
@@ -50,124 +53,131 @@ export async function analyzeTopicStreaming(
       currentStep: 'Analyzing topic structure...'
     });
 
-    console.log(`🤖 [AI Streaming] Sending request to API server...`);
-    
-    // Step 2: Get full analysis from AI
-    const response = await fetch('/api/analyze-topic', {
+    console.log(`🤖 [AI Streaming] Connecting to streaming API...`);
+
+    const response = await fetch('/api/analyze-topic-stream', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ topic }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, language }),
+      signal: abortSignal
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.details || 'API request failed');
+    if (!response.ok || !response.body) {
+      const details = await response.text();
+      throw new Error(details || 'Streaming API request failed');
     }
 
-    const result = await response.json();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let accumulatedNodes: any[] = [centerNode];
+    let accumulatedEdges: any[] = [];
 
-    if (!result.success || !result.data) {
-      console.error(`❌ [AI Streaming] No data received from API for topic: "${topic}"`);
-      throw new Error('No data received from API');
-    }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
 
-    const breakdown: TopicBreakdown = result.data;
-    console.log(`✅ [AI Streaming] Analysis complete, building nodes progressively...`);
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data: ')) continue;
+        const payload = JSON.parse(line.slice(6));
 
-    // Step 3: Update center node with real data
-    const updatedCenterNode = {
-      ...centerNode,
-      data: {
-        ...centerNode.data,
-        description: breakdown.description,
-        difficulty: breakdown.difficulty,
-        estimatedTime: breakdown.estimatedTime,
-        isLoading: false
-      }
-    };
+        switch (payload.type) {
+          case 'metadata': {
+            const updatedCenterNode = {
+              ...centerNode,
+              data: {
+                ...centerNode.data,
+                description: payload.data.description || centerNode.data.description,
+                difficulty: payload.data.difficulty,
+                estimatedTime: payload.data.estimatedTime,
+                isLoading: false
+              }
+            };
+            accumulatedNodes = [updatedCenterNode];
+            accumulatedEdges = [];
+            onProgress({
+              nodes: [...accumulatedNodes],
+              edges: [...accumulatedEdges],
+              isComplete: false,
+              currentStep: 'Building concept nodes...'
+            });
+            break;
+          }
+          case 'aspects_batch': {
+            const currentNodes: any[] = [];
+            const currentEdges: any[] = [];
+            // Include latest nodes from previous progress if needed by consumer
+            // Compute deterministic positions for batch
+            const aspects = payload.data as Array<any>;
+            const numNodes = aspects.length;
+            aspects.forEach((aspect: any, i: number) => {
+              const baseAngle = (i / Math.max(numNodes, 1)) * 2 * Math.PI;
+              const nodeWidth = MINDMAP_NODE_WIDTH;
+              const minRadius = calculateSafeRadius(numNodes, nodeWidth, MINDMAP_MIN_RADIUS, MINDMAP_MAX_RADIUS);
+              const radiusVariation = aspect.importance === 'high' ? -20 : aspect.importance === 'low' ? 20 : 0;
+              const radius = minRadius + radiusVariation;
+              const x = 400 + Math.cos(baseAngle) * radius;
+              const y = 300 + Math.sin(baseAngle) * radius;
+              const nodeId = `concept-${aspect.name}-${x.toFixed(0)}-${y.toFixed(0)}`;
 
-    onProgress({
-      nodes: [updatedCenterNode],
-      edges: [],
-      isComplete: false,
-      currentStep: 'Building concept nodes...'
-    });
+              currentNodes.push({
+                id: nodeId,
+                type: 'conceptNode',
+                position: { x, y },
+                data: {
+                  label: aspect.name,
+                  description: aspect.description,
+                  level: 1,
+                  expandable: true,
+                  importance: aspect.importance,
+                  connections: aspect.connections,
+                  parentId: 'main'
+                }
+              });
 
-    // Step 4: Add nodes progressively with small delays for visual effect
-    let currentNodes = [updatedCenterNode];
-    let currentEdges: any[] = [];
+              const { sourceHandle, targetHandle } = getOptimalHandles(baseAngle);
+              currentEdges.push({
+                id: `edge-main-${nodeId}`,
+                source: 'main',
+                target: nodeId,
+                sourceHandle,
+                targetHandle,
+                type: 'smoothstep',
+                animated: false,
+                style: { stroke: '#6b7280', strokeWidth: 2 }
+              });
+            });
 
-    for (let i = 0; i < breakdown.keyAspects.length; i++) {
-      const aspect = breakdown.keyAspects[i];
-      
-      // Calculate position for this concept node
-      const numNodes = breakdown.keyAspects.length;
-      const baseAngle = (i / numNodes) * 2 * Math.PI;
-      const nodeWidth = 256;
-      const minRadius = calculateSafeRadius(numNodes, nodeWidth, 100, 320);
-      const radiusVariation = (aspect.importance === 'high') ? -20 : 
-                             (aspect.importance === 'low') ? 20 : 0;
-      const radius = minRadius + radiusVariation;
-      const x = 400 + Math.cos(baseAngle) * radius;
-      const y = 300 + Math.sin(baseAngle) * radius;
+            // accumulate
+            accumulatedNodes = [
+              ...accumulatedNodes.filter(n => n.id === 'main'),
+              ...accumulatedNodes.filter(n => n.id !== 'main'),
+              ...currentNodes
+            ];
+            accumulatedEdges = [...accumulatedEdges, ...currentEdges];
 
-      // Create concept node
-      const conceptNode = {
-        id: `concept-${i}`,
-        type: 'conceptNode',
-        position: { x, y },
-        data: {
-          label: aspect.name,
-          description: aspect.description,
-          level: 1,
-          expandable: true,
-          importance: aspect.importance,
-          connections: aspect.connections,
-          parentId: 'main'
+            onProgress({
+              nodes: [...accumulatedNodes],
+              edges: [...accumulatedEdges],
+              isComplete: false,
+              currentStep: `Added ${currentNodes.length} concepts...`
+            });
+            break;
+          }
+          case 'complete': {
+            onProgress({ nodes: [...accumulatedNodes], edges: [...accumulatedEdges], isComplete: true, currentStep: 'Mind map complete!' });
+            break;
+          }
+          case 'error': {
+            throw new Error(payload.data?.message || 'Streaming error');
+          }
         }
-      };
-
-      // Create edge to connect to center
-      const { sourceHandle, targetHandle } = getOptimalHandles(baseAngle);
-      const edge = {
-        id: `edge-main-${i}`,
-        source: 'main',
-        target: `concept-${i}`,
-        sourceHandle,
-        targetHandle,
-        type: 'smoothstep',
-        animated: false,
-        style: { stroke: '#6b7280', strokeWidth: 2 }
-      };
-
-      currentNodes.push(conceptNode);
-      currentEdges.push(edge);
-
-      // Emit progress with new node
-      onProgress({
-        nodes: [...currentNodes],
-        edges: [...currentEdges],
-        isComplete: false,
-        currentStep: `Added "${aspect.name}" concept...`
-      });
-
-      // Small delay for visual streaming effect (only if not the last node)
-      if (i < breakdown.keyAspects.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 150));
       }
     }
-
-    // Step 5: Final completion
-    onProgress({
-      nodes: currentNodes,
-      edges: currentEdges,
-      isComplete: true,
-      currentStep: 'Mind map complete!'
-    });
-
-    console.log(`🎉 [AI Streaming] Progressive analysis completed with ${currentNodes.length} nodes`);
     
   } catch (error) {
     console.error(`❌ [AI Streaming] Error in progressive analysis:`, error);
@@ -199,7 +209,7 @@ export async function analyzeTopicStreaming(
 /**
  * Analyzes a topic and breaks it down into key concepts and learning path
  */
-export async function analyzeTopic(topic: string): Promise<TopicBreakdown> {
+export async function analyzeTopic(topic: string, language?: string): Promise<TopicBreakdown> {
   console.log(`🔍 [AI] Starting topic analysis for: "${topic}"`);
   
   try {
@@ -210,7 +220,7 @@ export async function analyzeTopic(topic: string): Promise<TopicBreakdown> {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify({ topic, language }),
     });
 
     if (!response.ok) {
@@ -238,7 +248,7 @@ export async function analyzeTopic(topic: string): Promise<TopicBreakdown> {
 /**
  * Expands a specific concept with detailed sub-concepts and resources
  */
-export async function expandConcept(concept: string, parentTopic?: string): Promise<ConceptExpansion> {
+export async function expandConcept(concept: string, parentTopic?: string, language?: string): Promise<ConceptExpansion> {
   console.log(`🔍 [AI] Starting concept expansion for: "${concept}"${parentTopic ? ` (in context of "${parentTopic}")` : ''}`);
   
   try {
@@ -249,7 +259,7 @@ export async function expandConcept(concept: string, parentTopic?: string): Prom
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ concept, parentTopic }),
+      body: JSON.stringify({ concept, parentTopic, language }),
     });
 
     if (!response.ok) {
@@ -299,8 +309,8 @@ export function createMindMapFromBreakdown(breakdown: TopicBreakdown): any {
     const baseAngle = (index / numNodes) * 2 * Math.PI;
     
     // Calculate safe radius to prevent node overlaps
-    const nodeWidth = 256; // ConceptNode max-width + padding
-    const minRadius = calculateSafeRadius(numNodes, nodeWidth, 100, 320);
+    const nodeWidth = MINDMAP_NODE_WIDTH; // ConceptNode max-width + padding
+    const minRadius = calculateSafeRadius(numNodes, nodeWidth, MINDMAP_MIN_RADIUS, MINDMAP_MAX_RADIUS);
     
     // Vary radius slightly based on importance but maintain good spacing
     const radiusVariation = (aspect.importance === 'high') ? -20 : 
@@ -366,7 +376,7 @@ export function createExpandedConceptNodes(
     const angle = (index / numSubNodes) * 2 * Math.PI;
     
     // Calculate safe radius for sub-concepts to prevent overlap
-    const nodeWidth = 256; // ConceptNode max-width + padding
+    const nodeWidth = MINDMAP_NODE_WIDTH; // ConceptNode max-width + padding
     const baseRadius = calculateSafeRadius(numSubNodes, nodeWidth, 60, 180);
     const x = parentPosition.x + Math.cos(angle) * baseRadius;
     const y = parentPosition.y + Math.sin(angle) * baseRadius;
@@ -415,7 +425,9 @@ export function createExpandedConceptNodes(
  */
 export async function analyzeUrlStreaming(
   url: string,
-  onProgress: StreamingCallback
+  onProgress: StreamingCallback,
+  language?: string,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   console.log(`🔍 [AI Streaming] Starting progressive URL analysis for: "${url}"`);
   
@@ -460,102 +472,91 @@ export async function analyzeUrlStreaming(
       currentStep: 'Extracting and analyzing content...'
     });
 
-    // Step 3: Get analysis from AI
-    const analysis = await analyzeUrl(url);
-    console.log(`✅ [AI Streaming] URL analysis complete, building nodes progressively...`);
-
-    // Step 4: Update center node with real data
-    const updatedCenterNode = {
-      ...centerNode,
-      data: {
-        ...centerNode.data,
-        label: analysis.title,
-        description: analysis.summary,
-        difficulty: analysis.difficulty,
-        domain: analysis.domain,
-        contentType: analysis.contentType,
-        credibility: analysis.credibility,
-        isLoading: false
-      }
-    };
-
-    onProgress({
-      nodes: [updatedCenterNode],
-      edges: [],
-      isComplete: false,
-      currentStep: 'Building concept nodes...'
+    console.log(`✅ [AI Streaming] Connecting to streaming API for URL...`);
+    const response = await fetch('/api/analyze-url-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, language }),
+      signal: abortSignal
     });
-
-    // Step 5: Add concept nodes progressively
-    let currentNodes = [updatedCenterNode];
-    let currentEdges: any[] = [];
-
-    for (let i = 0; i < analysis.concepts.length; i++) {
-      const concept = analysis.concepts[i];
-      
-      // Calculate position for this concept node
-      const numNodes = analysis.concepts.length;
-      const angle = (i / numNodes) * 2 * Math.PI;
-      const nodeWidth = 256;
-      const minRadius = calculateSafeRadius(numNodes, nodeWidth, 80, 280);
-      const x = 400 + Math.cos(angle) * minRadius;
-      const y = 300 + Math.sin(angle) * minRadius;
-
-      // Create concept node
-      const conceptNode = {
-        id: `concept-${i}`,
-        type: 'conceptNode',
-        position: { x, y },
-        data: {
-          label: concept.name,
-          description: concept.description,
-          level: 1,
-          expandable: true,
-          importance: concept.importance,
-          parentId: 'main',
-          sourceUrl: url
-        }
-      };
-
-      // Create edge to connect to center
-      const { sourceHandle, targetHandle } = getOptimalHandles(angle);
-      const edge = {
-        id: `edge-main-${i}`,
-        source: 'main',
-        target: `concept-${i}`,
-        sourceHandle,
-        targetHandle,
-        type: 'smoothstep',
-        animated: false,
-        style: { stroke: '#6b7280', strokeWidth: 2 }
-      };
-
-      currentNodes.push(conceptNode);
-      currentEdges.push(edge);
-
-      // Emit progress with new node
-      onProgress({
-        nodes: [...currentNodes],
-        edges: [...currentEdges],
-        isComplete: false,
-        currentStep: `Added "${concept.name}" concept...`
-      });
-
-      // Small delay for visual streaming effect (only if not the last node)
-      if (i < analysis.concepts.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 150));
-      }
+    if (!response.ok || !response.body) {
+      const details = await response.text();
+      throw new Error(details || 'Streaming API request failed');
     }
 
-    // Step 6: Final completion
-    onProgress({
-      nodes: currentNodes,
-      edges: currentEdges,
-      isComplete: true,
-      currentStep: 'Mind map complete!'
-    });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    console.log(`🎉 [AI Streaming] Progressive URL analysis completed with ${currentNodes.length} nodes`);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data: ')) continue;
+        const payload = JSON.parse(line.slice(6));
+        switch (payload.type) {
+          case 'metadata': {
+            const updatedCenterNode = {
+              ...centerNode,
+              data: {
+                ...centerNode.data,
+                label: payload.data.title || centerNode.data.label,
+                description: payload.data.summary || centerNode.data.description,
+                difficulty: payload.data.difficulty,
+                domain: payload.data.domain,
+                contentType: payload.data.contentType,
+                credibility: payload.data.credibility,
+                isLoading: false
+              }
+            };
+            onProgress({ nodes: [updatedCenterNode], edges: [], isComplete: false, currentStep: 'Building concept nodes...' });
+            break;
+          }
+          case 'concepts_batch': {
+            const concepts = payload.data as Array<any>;
+            const nodes: any[] = [];
+            const edges: any[] = [];
+            const numNodes = concepts.length;
+            concepts.forEach((concept: any, i: number) => {
+              const angle = (i / Math.max(numNodes, 1)) * 2 * Math.PI;
+              const nodeWidth = 256;
+              const minRadius = calculateSafeRadius(numNodes, nodeWidth, 80, 280);
+              const x = 400 + Math.cos(angle) * minRadius;
+              const y = 300 + Math.sin(angle) * minRadius;
+              const nodeId = `concept-${concept.name}-${x.toFixed(0)}-${y.toFixed(0)}`;
+              nodes.push({
+                id: nodeId,
+                type: 'conceptNode',
+                position: { x, y },
+                data: {
+                  label: concept.name,
+                  description: concept.description,
+                  level: 1,
+                  expandable: true,
+                  importance: concept.importance,
+                  parentId: 'main',
+                  sourceUrl: url
+                }
+              });
+              const { sourceHandle, targetHandle } = getOptimalHandles(angle);
+              edges.push({ id: `edge-main-${nodeId}`, source: 'main', target: nodeId, sourceHandle, targetHandle, type: 'smoothstep', animated: false, style: { stroke: '#6b7280', strokeWidth: 2 } });
+            });
+            onProgress({ nodes: [{ ...centerNode, data: { ...centerNode.data, isLoading: false } }, ...nodes], edges, isComplete: false, currentStep: `Added ${nodes.length} concepts...` });
+            break;
+          }
+          case 'complete':
+            onProgress({ nodes: [], edges: [], isComplete: true, currentStep: 'Mind map complete!' });
+            break;
+          case 'error':
+            throw new Error(payload.data?.message || 'Streaming error');
+        }
+      }
+    }
     
   } catch (error) {
     console.error(`❌ [AI Streaming] Error in progressive URL analysis:`, error);

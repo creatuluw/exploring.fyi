@@ -68,6 +68,15 @@ Explore.fyi is an interactive learning platform that helps students explore and 
 - Comments and notes functionality
 - Progress tracking per topic
 
+#### Paragraph-Based Learning System
+- **Granular Content Cards**: Each content section is split into focused paragraph cards
+- **Individual Paragraph Tracking**: Each paragraph can be marked as read/unread
+- **AI Chat Integration**: Click chat icon on any paragraph to ask specific questions
+- **Context-Aware AI**: AI responses use the specific paragraph content for accuracy
+- **Progress Visualization**: Section-level progress bars show reading completion
+- **Q&A Storage**: All paragraph-specific questions and answers are saved
+- **Reading Analytics**: Track reading patterns and comprehension progress
+
 ### 3. Source Tracking & References
 
 #### Automatic Source Logging
@@ -97,6 +106,19 @@ Explore.fyi is an interactive learning platform that helps students explore and 
 - Track learning paths taken
 - Export learning summaries
 - Share exploration journeys
+
+#### Paragraph-Level Progress Tracking
+- **Granular Reading Progress**: Track completion of individual paragraphs within each topic
+- **Visual Progress Indicators**: Real-time progress bars showing section completion percentages
+- **Reading State Persistence**: Mark paragraphs as read/unread with database persistence
+- **Completion Analytics**: Statistics on reading patterns and comprehension progress
+- **Resume Reading**: Return to exactly where you left off in any topic
+
+#### AI-Powered Learning Assistance
+- **Contextual Q&A**: Ask questions about specific paragraphs with AI responses
+- **Knowledge Base Building**: Save all Q&A pairs for future reference and review
+- **Comprehension Support**: Get explanations tailored to specific content pieces
+- **Learning Reinforcement**: Review saved questions and answers for better retention
 
 #### Knowledge Mapping
 - Personal knowledge graphs
@@ -288,6 +310,40 @@ CREATE TABLE content_progress (
 );
 ```
 
+#### Paragraph Progress Table
+```sql
+CREATE TABLE paragraph_progress (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL,
+  topic_id UUID NOT NULL,
+  section_id TEXT NOT NULL,
+  paragraph_id TEXT NOT NULL,
+  paragraph_hash TEXT NOT NULL, -- Content hash for consistency
+  is_read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMPTZ DEFAULT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(session_id, topic_id, section_id, paragraph_id)
+);
+```
+
+#### Paragraph Q&A Table
+```sql
+CREATE TABLE paragraph_qa (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL,
+  topic_id UUID NOT NULL,
+  section_id TEXT NOT NULL,
+  paragraph_id TEXT NOT NULL,
+  paragraph_hash TEXT NOT NULL,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  ai_model TEXT DEFAULT 'gemini-2.5-flash',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
 ## User Experience Flow
 
 ### 1. Landing Page
@@ -328,6 +384,16 @@ CREATE TABLE content_progress (
 - Related concepts sidebar
 - Progress indicators for content completion
 
+#### Paragraph-Based Content Experience
+- **Individual Paragraph Cards**: Content displayed as digestible, focused cards
+- **Interactive Reading Progress**: Checkmark buttons for marking paragraphs as read
+- **Hover-Activated Chat**: Chat icons appear on hover for paragraph-specific questions
+- **AI Chat Drawer**: Slide-out panel for contextual Q&A about specific paragraphs
+- **Visual Progress Feedback**: Green highlighting for completed paragraphs
+- **Section Progress Bars**: Real-time completion indicators for each content section
+- **Saved Q&A History**: Access to all previously asked questions and AI responses
+- **Resume Reading Flow**: Visual indicators for where you left off
+
 ### 4. Expansion Workflow
 - Click any node to reveal expansion options
 - AI generates relevant sub-concepts
@@ -343,18 +409,28 @@ CREATE TABLE content_progress (
 ## MVP Scope
 
 ### Phase 1 Features (MVP)
-- [ ] Svelte Flow integration for interactive mind mapping
-- [ ] Custom node components with click handlers
-- [ ] Basic topic input and mind map generation
-- [ ] URL content extraction and analysis
-- [ ] 3-level deep exploration capability
-- [ ] Interactive node functionality (click, hover, expand)
-- [ ] Dedicated content pages for each node/bubble
-- [ ] Basic AI-generated content sections (overview, details)
-- [ ] Navigation between mind map and content pages
-- [ ] Basic source tracking and display
-- [ ] Simple session persistence with PgLite
-- [ ] Responsive design for desktop and mobile
+- [x] Svelte Flow integration for interactive mind mapping
+- [x] Custom node components with click handlers
+- [x] Basic topic input and mind map generation
+- [x] URL content extraction and analysis
+- [x] 3-level deep exploration capability
+- [x] Interactive node functionality (click, hover, expand)
+- [x] Dedicated content pages for each node/bubble
+- [x] Basic AI-generated content sections (overview, details)
+- [x] Navigation between mind map and content pages
+- [x] Basic source tracking and display
+- [x] Simple session persistence with PgLite
+- [x] Responsive design for desktop and mobile
+
+#### ✨ New: Paragraph-Based Learning Features (Implemented)
+- [x] **Granular Content Cards**: Content split into focused paragraph cards
+- [x] **Individual Progress Tracking**: Mark each paragraph as read/unread
+- [x] **AI Chat Integration**: Ask questions about specific paragraphs
+- [x] **Context-Aware Responses**: AI uses paragraph content for accurate answers
+- [x] **Q&A Storage System**: Save and retrieve paragraph-specific questions
+- [x] **Visual Progress Indicators**: Section-level progress bars and completion stats
+- [x] **Reading State Persistence**: Database-backed progress tracking
+- [x] **Interactive Learning Interface**: Hover effects, chat drawers, and smooth UX
 
 ### Phase 2 Features
 - [ ] Advanced Svelte Flow features (minimap, controls panel)

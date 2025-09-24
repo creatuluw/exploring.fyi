@@ -1,0 +1,98 @@
+{
+  "navigation": {
+    "explore": "Explorar",
+    "history": "Historial",
+    "about": "Acerca",
+    "settings": "Configuración",
+    "test": "Prueba",
+    "start_learning": "Comenzar Aprendizaje",
+    "explore_topics": "Explorar Temas",
+    "ai_powered_learning": "Aprendizaje Potenciado por IA"
+  },
+  "landing": {
+    "title": "Transforma Tu Curiosidad en Conocimiento",
+    "subtitle": "Explora cualquier tema a través de mapas mentales interactivos potenciados por IA. Convierte tus preguntas en comprensión integral.",
+    "explore_topic": "Explorar Tema",
+    "analyze_url": "Analizar URL",
+    "upload_image": "Subir Imagen",
+    "trusted_by": "Confiado por 10,000+ estudiantes",
+    "rating": "Calificación 4.9/5"
+  },
+  "topic_input": {
+    "placeholder": "Ingresa cualquier tema que quieras explorar...",
+    "button": "Explorar con IA",
+    "loading": "Generando Mapa Mental...",
+    "popular_topics": "Temas populares para explorar:",
+    "ai_powered_analysis": "Análisis Potenciado por IA",
+    "ai_powered_analysis_desc": "Obtén desgloses comprensivos de cualquier tema",
+    "interactive_mind_maps": "Mapas Mentales Interactivos",
+    "interactive_mind_maps_desc": "Explora conexiones visualmente",
+    "deep_learning": "Aprendizaje Profundo",
+    "deep_learning_desc": "Profundiza en cualquier concepto",
+    "suggestions": {
+      "machine_learning": "Aprendizaje Automático",
+      "climate_change": "Cambio Climático",
+      "ancient_rome": "Roma Antigua",
+      "quantum_physics": "Física Cuántica",
+      "renaissance_art": "Arte Renacentista",
+      "building_websites": "Construir Sitios Web",
+      "human_psychology": "Psicología Humana",
+      "space_exploration": "Exploración Espacial",
+      "solar_system": "El Sistema Solar",
+      "world_war_ii": "Segunda Guerra Mundial",
+      "human_anatomy": "Anatomía Humana",
+      "elementary_math": "Matemáticas Básicas"
+    }
+  },
+  "url_input": {
+    "placeholder": "Ingresa una URL para analizar...",
+    "button": "Analizar con IA",
+    "loading": "Analizando Contenido..."
+  },
+  "settings": {
+    "title": "Configuración",
+    "subtitle": "Configura tus preferencias",
+    "settings_saved": "Configuración guardada",
+    "language_settings": "Configuración de Idioma",
+    "language_settings_desc": "Configura cómo la IA interpreta y responde a tus entradas",
+    "interface_language": "Idioma de Interfaz",
+    "interface_language_desc": "Idioma para botones, menús y texto de interfaz",
+    "ai_language": "Idioma de IA",
+    "ai_language_desc": "Idioma para que la IA entienda tus entradas y genere mapas mentales y contenido",
+    "save_settings": "Guardar Configuración",
+    "saving": "Guardando...",
+    "reset_to_defaults": "Restablecer por Defecto",
+    "how_language_settings_work": "Cómo Funcionan las Configuraciones de Idioma",
+    "interface_changes": "Interfaz: Cambia el texto de menús y botones",
+    "ai_language_desc_full": "Idioma de IA: Idioma para entender entradas y generar contenido",
+    "existing_content": "Contenido existente: Se mantiene en idioma original",
+    "new_explorations": "Nuevas exploraciones: Usan el idioma de IA seleccionado",
+    "supported_languages": "Idiomas Soportados"
+  },
+  "explore": {
+    "back_to_home": "Volver al Inicio",
+    "analyzing": "Analizando...",
+    "generating_mind_map": "Generando mapa mental...",
+    "mind_map_complete": "¡Mapa mental completo!",
+    "error_analyzing": "Error analizando tema",
+    "try_again": "Intentar de nuevo"
+  },
+  "footer": {
+    "copyright": "© 2025 Explore.fyi. Transformando curiosidad en conocimiento.",
+    "privacy": "Privacidad",
+    "terms": "Términos",
+    "contact": "Contacto"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "reset": "Restablecer",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "close": "Cerrar"
+  }
+}

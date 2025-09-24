@@ -1,0 +1,98 @@
+{
+  "navigation": {
+    "explore": "Explore",
+    "history": "History",
+    "about": "About",
+    "settings": "Settings",
+    "test": "Test",
+    "start_learning": "Start Learning",
+    "explore_topics": "Explore Topics",
+    "ai_powered_learning": "AI-Powered Learning"
+  },
+  "landing": {
+    "title": "Transform Your Curiosity Into Knowledge",
+    "subtitle": "Explore any topic through AI-powered interactive mind maps. Turn your questions into comprehensive understanding.",
+    "explore_topic": "Explore Topic",
+    "analyze_url": "Analyze URL",
+    "upload_image": "Upload Image",
+    "trusted_by": "Trusted by 10,000+ learners",
+    "rating": "4.9/5 rating"
+  },
+  "topic_input": {
+    "placeholder": "Enter any topic you want to explore...",
+    "button": "Explore with AI",
+    "loading": "Generating Mind Map...",
+    "popular_topics": "Popular topics to explore:",
+    "ai_powered_analysis": "AI-Powered Analysis",
+    "ai_powered_analysis_desc": "Get comprehensive breakdowns of any topic",
+    "interactive_mind_maps": "Interactive Mind Maps",
+    "interactive_mind_maps_desc": "Explore connections visually",
+    "deep_learning": "Deep Learning",
+    "deep_learning_desc": "Dive deeper into any concept",
+    "suggestions": {
+      "machine_learning": "Machine Learning",
+      "climate_change": "Climate Change",
+      "ancient_rome": "Ancient Rome",
+      "quantum_physics": "Quantum Physics",
+      "renaissance_art": "Renaissance Art",
+      "building_websites": "Building Websites",
+      "human_psychology": "Human Psychology",
+      "space_exploration": "Space Exploration",
+      "solar_system": "The Solar System",
+      "world_war_ii": "World War II",
+      "human_anatomy": "Human Anatomy",
+      "elementary_math": "Elementary Math"
+    }
+  },
+  "url_input": {
+    "placeholder": "Enter a URL to analyze...",
+    "button": "Analyze with AI",
+    "loading": "Analyzing Content..."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure your preferences",
+    "settings_saved": "Settings saved",
+    "language_settings": "Language Settings",
+    "language_settings_desc": "Configure how AI interprets and responds to your inputs",
+    "interface_language": "Interface Language",
+    "interface_language_desc": "Language for buttons, menus, and interface text",
+    "ai_language": "AI Language",
+    "ai_language_desc": "Language for AI to understand your inputs and generate mind maps and content",
+    "save_settings": "Save Settings",
+    "saving": "Saving...",
+    "reset_to_defaults": "Reset to Defaults",
+    "how_language_settings_work": "How Language Settings Work",
+    "interface_changes": "Interface: Changes menu and button text",
+    "ai_language_desc_full": "AI Language: Language for understanding inputs and generating content",
+    "existing_content": "Existing content: Stays in original language",
+    "new_explorations": "New explorations: Use the selected AI language",
+    "supported_languages": "Supported Languages"
+  },
+  "explore": {
+    "back_to_home": "Back to Home",
+    "analyzing": "Analyzing...",
+    "generating_mind_map": "Generating mind map...",
+    "mind_map_complete": "Mind map complete!",
+    "error_analyzing": "Error analyzing topic",
+    "try_again": "Try again"
+  },
+  "footer": {
+    "copyright": "© 2025 Explore.fyi. Transforming curiosity into knowledge.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "contact": "Contact"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "reset": "Reset",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "close": "Close"
+  }
+}

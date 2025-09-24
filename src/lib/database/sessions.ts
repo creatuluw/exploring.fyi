@@ -11,6 +11,7 @@ interface Session {
   settings: Record<string, any> | null;
   last_activity: string;
   created_at: string;
+  updated_at: string;
   topic_count: number;
 }
 
@@ -20,6 +21,7 @@ interface SessionInsert {
   settings?: Record<string, any> | null;
   last_activity?: string;
   created_at?: string;
+  updated_at?: string;
   topic_count?: number;
 }
 
@@ -29,10 +31,51 @@ interface SessionUpdate {
   settings?: Record<string, any> | null;
   last_activity?: string;
   created_at?: string;
+  updated_at?: string;
   topic_count?: number;
 }
 
 export class SessionService {
+  /**
+   * Ensure session exists in database (create if it doesn't exist)
+   */
+  static async ensureSessionExists(sessionId: string): Promise<Session> {
+    try {
+      // First, try to get the existing session
+      const existing = await this.getSession(sessionId);
+      if (existing) {
+        return existing;
+      }
+      
+      // Session doesn't exist, create it
+      console.log(`📝 [Sessions] Creating session for ID: ${sessionId}`);
+      const sessionData: SessionInsert = {
+        id: sessionId, // Use the provided ID
+        user_id: null, // Anonymous session
+        settings: {},
+        last_activity: new Date().toISOString(),
+        topic_count: 0
+      };
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert(sessionData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ [Sessions] Failed to create session:', error);
+        throw error;
+      }
+
+      console.log(`✅ [Sessions] Created session: ${data.id}`);
+      return data;
+    } catch (error) {
+      console.error('❌ [Sessions] Failed to ensure session exists:', error);
+      throw error;
+    }
+  }
+
   /**
    * Create a new anonymous session
    */
@@ -93,10 +136,13 @@ export class SessionService {
    */
   static async updateSessionActivity(sessionId: string): Promise<void> {
     try {
+      const now = new Date().toISOString();
       const { error } = await supabase
         .from('sessions')
         .update({ 
-          last_activity: new Date().toISOString() 
+          last_activity: now,
+          // Include updated_at manually to avoid trigger issues
+          updated_at: now
         })
         .eq('id', sessionId);
 
@@ -115,11 +161,14 @@ export class SessionService {
     settings: Record<string, any>
   ): Promise<void> {
     try {
+      const now = new Date().toISOString();
       const { error } = await supabase
         .from('sessions')
         .update({ 
           settings,
-          last_activity: new Date().toISOString()
+          last_activity: now,
+          // Include updated_at manually to avoid trigger issues
+          updated_at: now
         })
         .eq('id', sessionId);
 
@@ -152,6 +201,35 @@ export class SessionService {
       if (error) dbHelpers.handleError(error);
     } catch (error) {
       console.error('Failed to increment topic count:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Decrement topic count for session (when topics are deleted)
+   */
+  static async decrementTopicCount(sessionId: string): Promise<void> {
+    try {
+      // Get current session to decrement topic count
+      const session = await this.getSession(sessionId);
+      if (!session) {
+        console.warn('Session not found for topic count decrement:', sessionId);
+        return;
+      }
+
+      const newCount = Math.max(0, session.topic_count - 1); // Ensure we don't go below 0
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ 
+          topic_count: newCount,
+          last_activity: new Date().toISOString()
+        })
+        .eq('id', sessionId);
+
+      if (error) dbHelpers.handleError(error);
+    } catch (error) {
+      console.error('Failed to decrement topic count:', error);
       throw error;
     }
   }

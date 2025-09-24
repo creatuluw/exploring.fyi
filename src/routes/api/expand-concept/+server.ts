@@ -9,6 +9,9 @@ import { googleAI } from '@genkit-ai/google-genai';
 import { genkit } from 'genkit';
 import { z } from 'zod';
 import { GEMINI_API_KEY } from '$env/static/private';
+import { getConceptExpansionPrompt } from '$lib/services/aiPrompts.js';
+import type { SupportedLanguage } from '$lib/types/language.js';
+import { MAX_MINDMAP_NODES } from '$lib/settings';
 
 // Initialize Genkit on the server
 const ai = genkit({
@@ -27,7 +30,7 @@ const ConceptExpansionSchema = z.object({
     examples: z.array(z.string()).describe('Real-world examples'),
     relatedTo: z.array(z.string()).describe('Related concepts'),
     difficulty: z.enum(['beginner', 'intermediate', 'advanced'])
-  })).describe('Sub-concepts that make up this concept'),
+  })).max(MAX_MINDMAP_NODES).describe(`Sub-concepts that make up this concept (maximum ${MAX_MINDMAP_NODES} sub-concepts)`),
   practicalApplications: z.array(z.string()).describe('How this concept is used in practice'),
   commonMisconceptions: z.array(z.string()).describe('Things people often get wrong'),
   resources: z.array(z.object({
@@ -42,41 +45,21 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     console.log('🔍 [API] Concept expansion request received');
     
-    const { concept, parentTopic } = await request.json();
+    const { concept, parentTopic, language } = await request.json();
     
     if (!concept) {
       return json({ error: 'Concept is required' }, { status: 400 });
     }
 
-    console.log(`🔍 [API] Starting concept expansion for: "${concept}"${parentTopic ? ` (in context of "${parentTopic}")` : ''}`);
+    const aiLanguage = (language as SupportedLanguage) || 'en';
+    console.log(`🔍 [API] Starting concept expansion for: "${concept}"${parentTopic ? ` (in context of "${parentTopic}")` : ''} in language: ${aiLanguage}`);
+    console.log(`⚙️ [API] Max mindmap nodes setting: ${MAX_MINDMAP_NODES}`);
 
-    const contextPrompt = parentTopic 
-      ? `in the context of "${parentTopic}"`
-      : '';
+    // Get language-appropriate prompt with max sub-concepts limit
+    const prompt = getConceptExpansionPrompt(concept, parentTopic, aiLanguage) + ` Generate at most ${MAX_MINDMAP_NODES} sub-concepts.`;
 
     const result = await ai.generate({
-      prompt: `Expand the concept "${concept}" ${contextPrompt}. Provide a detailed breakdown that includes:
-
-1. 3-5 sub-concepts that make up this concept
-2. Practical applications and real-world examples
-3. Common misconceptions people have
-4. Learning resources and materials
-
-For each sub-concept, provide:
-- Clear name and description
-- 2-3 concrete examples
-- Related concepts for further exploration
-- Appropriate difficulty level
-
-Focus on:
-- Practical understanding over theoretical complexity
-- Real-world applications and examples
-- Clear explanations suitable for learners
-- Actionable next steps
-
-Make the expansion educational and engaging, helping learners build a solid understanding of how this concept works and why it matters.
-
-Concept to expand: ${concept}`,
+      prompt,
       output: {
         schema: ConceptExpansionSchema,
       },
@@ -88,7 +71,7 @@ Concept to expand: ${concept}`,
     }
 
     console.log(`✅ [API] Successfully expanded concept: "${concept}"`);
-    console.log(`📊 [API] Generated ${result.output.subConcepts.length} sub-concepts`);
+    console.log(`📊 [API] Generated ${result.output.subConcepts.length} sub-concepts (max: ${MAX_MINDMAP_NODES})`);
 
     return json({ 
       success: true, 

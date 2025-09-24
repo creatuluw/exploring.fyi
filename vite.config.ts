@@ -7,6 +7,12 @@ export default defineConfig({
 	server: {
 		port: 5173
 	},
+	optimizeDeps: {
+		exclude: ['@genkit-ai/ai', '@genkit-ai/google-genai', 'genkit']
+	},
+	ssr: {
+		external: ['@genkit-ai/ai', '@genkit-ai/google-genai', 'genkit']
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

@@ -3,17 +3,42 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import Header from '$lib/components/Header.svelte';
 	import { session, isSessionReady } from '$lib/stores/session.js';
-	import { onMount } from 'svelte';
+	import { contentCache } from '$lib/stores/contentCache.js';
+	import { backgroundSync } from '$lib/services/backgroundSync.js';
+	import { interfaceLanguage } from '$lib/stores/language.js';
+	import { initializeTranslations, t } from '$lib/i18n/index.js';
+	import { onMount, onDestroy } from 'svelte';
 
 	let { children } = $props();
 
-	// Initialize session when the app loads
+	// Initialize session and translations when the app loads
 	onMount(async () => {
 		try {
+			// Initialize translations first
+			await initializeTranslations();
+			console.log('Translations initialized successfully');
+			
+			// Then initialize session
 			await session.initialize();
 			console.log('Session initialized successfully');
+			
+			// Initialize background sync for content caching
+			backgroundSync.start();
+			console.log('Background sync service started');
 		} catch (error) {
-			console.error('Failed to initialize session:', error);
+			console.error('Failed to initialize app:', error);
+		}
+	});
+	
+	onDestroy(() => {
+		// Clean up background sync when app is destroyed
+		backgroundSync.stop();
+	});
+	
+	// Update document language when interface language changes
+	$effect(() => {
+		if (typeof document !== 'undefined') {
+			document.documentElement.lang = $interfaceLanguage;
 		}
 	});
 </script>
@@ -35,13 +60,13 @@
 			<div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
 				<div class="flex items-center space-x-2">
 					<p class="text-zinc-500 text-sm font-inter">
-						© 2025 Explore.fyi. Transforming curiosity into knowledge.
+						{$t('footer.copyright')}
 					</p>
 				</div>
 				<div class="flex items-center space-x-6 text-sm text-zinc-500 font-inter">
-					<a href="/privacy" class="hover:text-zinc-900 transition-colors duration-200">Privacy</a>
-					<a href="/terms" class="hover:text-zinc-900 transition-colors duration-200">Terms</a>
-					<a href="/contact" class="hover:text-zinc-900 transition-colors duration-200">Contact</a>
+					<a href="/privacy" class="hover:text-zinc-900 transition-colors duration-200">{$t('footer.privacy')}</a>
+					<a href="/terms" class="hover:text-zinc-900 transition-colors duration-200">{$t('footer.terms')}</a>
+					<a href="/contact" class="hover:text-zinc-900 transition-colors duration-200">{$t('footer.contact')}</a>
 				</div>
 			</div>
 		</div>

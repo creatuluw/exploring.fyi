@@ -1,0 +1,96 @@
+# Explore.fyi - LLM Documentation
+
+Explore.fyi is an AI-powered interactive learning platform that transforms any topic into an explorable mind map with on-demand content generation.
+
+## How to Use the Application
+
+### Core Features
+- **Topic Exploration**: Enter any topic to generate an interactive mind map
+- **Mind Map Navigation**: Click nodes to expand and explore related concepts
+- **On-Demand Content**: Generate detailed explanations for any concept
+- **Learning History**: Track and resume previous learning sessions
+- **Multi-language Support**: Available in multiple languages
+
+### Getting Started
+1. Visit the homepage at `/`
+2. Enter a topic in the search field (e.g., "Machine Learning", "Quantum Physics")
+3. The AI will generate an interactive mind map with key concepts
+4. Click on any node to expand it with related subtopics
+5. Use "Explain this" to get detailed content about any concept
+6. View your learning journey at `/history`
+
+### Navigation
+- `/` - Main exploration interface
+- `/history` - Learning history and progress tracking
+- `/about` - Information about the platform
+- `/topic/[slug]` - Individual topic view with mind map
+
+### Technology Stack
+- **Frontend**: SvelteKit with TypeScript
+- **AI Integration**: Google Gemini via Genkit AI framework
+- **Database**: Supabase for data persistence
+- **Styling**: Tailwind CSS
+- **Mind Maps**: @xyflow/svelte for interactive visualizations
+
+### AI Models Used
+- Gemini 2.5 Flash for content generation and analysis
+- Structured output generation using Zod schemas
+- Temperature-controlled generation for consistent quality
+
+### Key Services
+- **TopicAnalysis**: Breaks down topics into explorable concepts
+- **ContentGeneration**: Creates detailed explanations on-demand
+- **ProgressTracking**: Monitors learning progress and resumption
+- **MindMapGeneration**: Converts topic analysis into interactive maps
+
+## Development Setup
+
+### Prerequisites
+- Node.js 18+
+- npm or pnpm package manager
+
+### Installation
+1. Clone the repository
+2. Run `npm install` to install dependencies
+3. Set up environment variables (see docs/SETUP.md)
+4. Run `npm run dev` to start development server
+
+### Environment Variables Required
+- `GEMINI_API_KEY` - Google AI API key
+- `DATABASE_URL` - Supabase database connection
+- `PUBLIC_SUPABASE_URL` - Supabase project URL
+- `PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
+
+### Architecture
+- Database schema supports topics, chapters, paragraphs, and progress tracking
+- Modular service architecture for AI integration
+- Component-based UI with reusable elements
+- Type-safe development with comprehensive TypeScript coverage
+
+## For LLMs Interacting with This Codebase
+
+### Key Files to Understand
+- `src/lib/services/` - Core business logic and AI integration
+- `src/lib/database/` - Database interaction layer
+- `src/lib/components/` - Reusable UI components
+- `src/routes/` - SvelteKit routing and API endpoints
+- `docs/` - Technical documentation and guides
+
+### Important Services
+- `topicAnalysisWithPersistence.js` - Main topic analysis and mind map generation
+- `tocGeneration.ts` - Table of contents generation for structured learning
+- `aiPrompts.js` - AI prompt templates and configuration
+- `progressTracking.js` - Learning progress and session management
+
+### Database Schema
+- Topics: Main learning subjects with metadata
+- Chapters: Structured content sections within topics
+- Paragraphs: Individual content blocks with generation status
+- Progress: User learning progress and session tracking
+
+### AI Integration Pattern
+1. User input → Topic analysis → Mind map generation
+2. Node interaction → Content generation → Display
+3. Progress tracking → Session persistence → History
+
+This platform demonstrates effective human-AI collaboration for interactive learning experiences.

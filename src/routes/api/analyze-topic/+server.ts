@@ -9,6 +9,9 @@ import { googleAI } from '@genkit-ai/google-genai';
 import { genkit } from 'genkit';
 import { z } from 'zod';
 import { GEMINI_API_KEY } from '$env/static/private';
+import { getTopicAnalysisPrompt } from '$lib/services/aiPrompts.js';
+import type { SupportedLanguage } from '$lib/types/language.js';
+import { MAX_MINDMAP_NODES } from '$lib/settings';
 
 // Initialize Genkit on the server
 const ai = genkit({
@@ -27,7 +30,7 @@ const TopicBreakdownSchema = z.object({
     description: z.string().describe('Brief description of this aspect'),
     importance: z.enum(['high', 'medium', 'low']).describe('Importance level'),
     connections: z.array(z.string()).describe('How this connects to other aspects')
-  })).describe('Key aspects and concepts of the topic'),
+  })).max(MAX_MINDMAP_NODES).describe(`Key aspects and concepts of the topic (maximum ${MAX_MINDMAP_NODES} aspects)`),
   learningPath: z.array(z.object({
     step: z.number().describe('Order in learning sequence'),
     concept: z.string().describe('Concept to learn'),
@@ -50,36 +53,21 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 500 });
     }
     
-    const { topic } = await request.json();
+    const { topic, language } = await request.json();
     
     if (!topic) {
       return json({ error: 'Topic is required' }, { status: 400 });
     }
 
-    console.log(`🔍 [API] Starting topic analysis for: "${topic}"`);
+    const aiLanguage = (language as SupportedLanguage) || 'en';
+    console.log(`🔍 [API] Starting topic analysis for: "${topic}" in language: ${aiLanguage}`);
+    console.log(`⚙️ [API] Max mindmap nodes setting: ${MAX_MINDMAP_NODES}`);
+
+    // Get language-appropriate prompt with max aspects limit
+    const prompt = getTopicAnalysisPrompt(topic, aiLanguage, MAX_MINDMAP_NODES);
 
     const result = await ai.generate({
-      prompt: `Analyze the topic "${topic}" for educational purposes. Provide a comprehensive breakdown that includes:
-
-1. A clear description of what this topic is about
-2. 4-6 key aspects or concepts that make up this topic
-3. A logical learning path with prerequisites
-4. Difficulty level assessment
-5. Time estimation for understanding
-
-Focus on creating a learning-oriented analysis that helps someone understand how to approach this topic systematically. Consider both theoretical understanding and practical application.
-
-Make sure each key aspect includes:
-- Clear name and description
-- Importance level (high/medium/low)
-- Connections to other aspects
-
-For the learning path, ensure:
-- Logical progression from basic to advanced
-- Clear prerequisites for each step
-- Practical learning sequence
-
-Topic to analyze: ${topic}`,
+      prompt,
       output: {
         schema: TopicBreakdownSchema,
       },
@@ -91,7 +79,7 @@ Topic to analyze: ${topic}`,
     }
 
     console.log(`✅ [API] Successfully analyzed topic: "${topic}"`);
-    console.log(`📊 [API] Generated breakdown with ${result.output.keyAspects.length} key aspects`);
+    console.log(`📊 [API] Generated breakdown with ${result.output.keyAspects.length} key aspects (max: ${MAX_MINDMAP_NODES})`);
 
     return json({ 
       success: true, 

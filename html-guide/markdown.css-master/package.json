@@ -1,0 +1,39 @@
+{
+    "name": "@sukka/markdown.css",
+    "version": "0.1.5",
+    "description": "The simple CSS to replicate the GitHub Markdown style (Sukka Ver.)",
+    "main": "dist/markdown.min.css",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/SukkaW/markdown.css.git"
+    },
+    "keywords": [
+        "css",
+        "markdown",
+        "browser",
+        "md",
+        "css",
+        "style",
+        "stylesheet"
+    ],
+    "author": "SukkaW (https://skk.moe)",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/SukkaW/markdown.css/issues"
+    },
+    "homepage": "https://github.com/SukkaW/markdown.css#readme",
+    "devDependencies": {
+        "del": "5.1.0",
+        "gulp": "4.0.2",
+        "gulp-autoprefixer": "7.0.1",
+        "gulp-clean-css": "4.2.0",
+        "gulp-concat": "2.6.1",
+        "gulp-csscomb": "3.1.0",
+        "gulp-csslint": "1.0.1",
+        "gulp-header": "2.0.9",
+        "gulp-rename": "2.0.0"
+    }
+}

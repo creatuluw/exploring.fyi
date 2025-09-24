@@ -1,17 +1,25 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Clock, Brain, TrendingUp, BookOpen, ExternalLink, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-svelte';
+	import { Clock, Brain, TrendingUp, BookOpen, ExternalLink, RotateCcw, ChevronLeft, ChevronRight, MoreVertical, PlayCircle, CheckCircle, BarChart } from 'lucide-svelte';
 	import { session } from '$lib/stores/session.js';
 	import { TopicsService } from '$lib/database/topics.js';
 	import { ProgressService } from '$lib/database/progress.js';
 	import { getTopicHistory, loadTopicMindMap } from '$lib/services/topicAnalysisWithPersistence.js';
+	import { TopicResumptionService, type TopicResumptionInfo } from '$lib/services/topicResumption.js';
+	import TopicActionsModal from './TopicActionsModal.svelte';
+	import { dbHelpers, supabase } from '$lib/database/supabase.js';
 
 	// State
 	let isLoading = $state(true);
 	let topics = $state<any[]>([]);
+	let topicResumptionInfo = $state<Map<string, TopicResumptionInfo>>(new Map());
 	let progressSummary = $state<any>(null);
 	let searchQuery = $state('');
 	let selectedFilter = $state<'all' | 'recent' | 'completed'>('all');
+	
+	// Modal state
+	let showActionsModal = $state(false);
+	let selectedTopic = $state<any>(null);
 	
 	// Pagination state
 	let currentPage = $state(1);
@@ -87,7 +95,25 @@
 			topics = loadedTopics;
 			console.log('📊 [History] Loaded topics:', topics);
 			console.log('📊 [History] Topics count:', topics.length);
-			console.log('📊 [History] Topics assigned to reactive state:', topics);
+			
+			// Load resumption analysis for each topic
+			if (TopicResumptionService.canAccessProgress()) {
+				console.log('🔍 [History] Loading resumption analysis for topics...');
+				const resumptionMap = new Map<string, TopicResumptionInfo>();
+				
+				for (const topic of loadedTopics) {
+					try {
+						const resumptionInfo = await TopicResumptionService.analyzeTopicForResumption(topic.id);
+						resumptionMap.set(topic.id, resumptionInfo);
+						console.log(`📊 [History] Resumption analysis for ${topic.id}:`, resumptionInfo);
+					} catch (error) {
+						console.warn(`⚠️ [History] Failed to analyze resumption for topic ${topic.id}:`, error);
+					}
+				}
+				
+				topicResumptionInfo = resumptionMap;
+				console.log('✅ [History] Completed resumption analysis for all topics');
+			}
 			
 			// Load progress summary for current session if available
 			if ($session.id) {
@@ -204,13 +230,74 @@
 
 	// Actions
 	async function resumeTopic(topicId: string) {
-		// Navigate to explore page with saved mind map
-		window.location.href = `/explore?topic=${topicId}&resume=true`;
+		try {
+			// Get topic details to find the associated mindmap
+			const topic = await TopicsService.getTopicById(topicId);
+			if (topic && topic.mind_map_data && topic.mind_map_data.mindMapId) {
+				// Get the mindmap to access its slug
+				const { data: mindMap } = await supabase
+					.from('mind_maps')
+					.select('slug')
+					.eq('id', topic.mind_map_data.mindMapId)
+					.single();
+				
+				if (mindMap && mindMap.slug) {
+					// Navigate directly to mindmap using slug
+					window.location.href = `/mindmap/${mindMap.slug}`;
+					return;
+				}
+			}
+			
+			// Fallback: navigate to explore page with topic slug/ID
+			if (topic && topic.slug) {
+				window.location.href = `/explore?topic=${topic.slug}&resume=true`;
+			} else {
+				window.location.href = `/explore?topic=${topicId}&resume=true`;
+			}
+		} catch (error) {
+			console.error('❌ [History] Error getting topic/mindmap for navigation:', error);
+			// Fallback to ID-based navigation
+			window.location.href = `/explore?topic=${topicId}&resume=true`;
+		}
 	}
 
 	async function viewTopicDetails(topicId: string) {
-		// Navigate to topic content page
-		window.location.href = `/topic/${topicId}`;
+		// Use smart resumption to determine best navigation
+		try {
+			const resumptionInfo = await TopicResumptionService.analyzeTopicForResumption(topicId);
+			// Extract slug from topic ID for URL routing
+			const topicSlug = dbHelpers.extractTopicSlug(topicId) || topicId;
+			const smartUrl = TopicResumptionService.getSmartNavigationUrl(topicSlug, resumptionInfo);
+			window.location.href = smartUrl;
+		} catch (error) {
+			console.error('❌ [History] Error analyzing topic for smart resumption:', error);
+			// Fallback to direct navigation with slug
+			const topicSlug = dbHelpers.extractTopicSlug(topicId) || topicId;
+			window.location.href = `/topic/${topicSlug}`;
+		}
+	}
+
+	async function continueReading(topicId: string) {
+		// Direct smart navigation optimized for continuation
+		try {
+			const resumptionInfo = await TopicResumptionService.analyzeTopicForResumption(topicId);
+			
+			if (resumptionInfo.hasProgress) {
+				// Extract slug from topic ID for URL routing
+				const topicSlug = dbHelpers.extractTopicSlug(topicId) || topicId;
+				const smartUrl = TopicResumptionService.getSmartNavigationUrl(topicSlug, resumptionInfo);
+				window.location.href = smartUrl;
+			} else {
+				// No progress yet, go to content directly with slug
+				const topicSlug = dbHelpers.extractTopicSlug(topicId) || topicId;
+				window.location.href = `/topic/${topicSlug}`;
+			}
+		} catch (error) {
+			console.error('❌ [History] Error continuing reading:', error);
+			// Fallback with slug
+			const topicSlug = dbHelpers.extractTopicSlug(topicId) || topicId;
+			window.location.href = `/topic/${topicSlug}`;
+		}
 	}
 
 	function formatTimeAgo(dateString: string): string {
@@ -253,6 +340,23 @@
 		if (currentPage > 1) {
 			currentPage--;
 		}
+	}
+
+	// Modal handlers
+	function handleTopicActions(topic: any) {
+		selectedTopic = topic;
+		showActionsModal = true;
+	}
+
+	function handleCloseModal() {
+		showActionsModal = false;
+		selectedTopic = null;
+	}
+
+	function handleTopicDeleted() {
+		// Refresh the topics list
+		loadHistoryData();
+		handleCloseModal();
 	}
 </script>
 
@@ -357,9 +461,10 @@
 	{#if !isLoading && paginatedTopics.length > 0}
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
 			{#each paginatedTopics as topic (topic.id)}
+				{@const resumption = topicResumptionInfo.get(topic.id)}
 				<article class="flex flex-col h-full border border-transparent [background:linear-gradient(var(--color-white),var(--color-zinc-50))_padding-box,linear-gradient(120deg,var(--color-zinc-300),var(--color-zinc-100),var(--color-zinc-300))_border-box] rounded-lg hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
 					<div class="flex flex-col h-full p-5">
-						<!-- Header with icons -->
+						<!-- Header with icons and actions -->
 						<div class="flex items-center justify-between mb-3">
 							<div class="flex items-center space-x-2">
 								{#if topic.source_type === 'url'}
@@ -373,8 +478,17 @@
 									{topic.source_type}
 								</span>
 							</div>
-							<div class="text-xs text-zinc-400">
-								{formatTimeAgo(topic.created_at)}
+							<div class="flex items-center space-x-2">
+								<div class="text-xs text-zinc-400">
+									{formatTimeAgo(topic.created_at)}
+								</div>
+								<button
+									onclick={(e) => { e.stopPropagation(); handleTopicActions(topic); }}
+									class="p-1 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+									title="Topic actions"
+								>
+									<MoreVertical class="w-4 h-4" />
+								</button>
 							</div>
 						</div>
 
@@ -384,18 +498,56 @@
 						</h3>
 
 						<!-- Stats -->
-						<div class="flex items-center gap-4 text-xs text-zinc-500 mb-4">
-							{#if topic.mindMap}
-								<div class="flex items-center gap-1">
-									<Brain class="w-3 h-3" />
-									<span>{topic.mindMap.nodeCount}</span>
+						<div class="mb-4">
+							{#if resumption?.hasExistingContent}
+								<!-- Progress information -->
+								<div class="flex items-center gap-4 text-xs text-zinc-500 mb-2">
+									<div class="flex items-center gap-1">
+										<BarChart class="w-3 h-3" />
+										<span>{resumption.overallProgress}% read</span>
+									</div>
+									{#if resumption.completedChapters > 0}
+										<div class="flex items-center gap-1">
+											<CheckCircle class="w-3 h-3" />
+											<span>{resumption.completedChapters}/{resumption.totalChapters} chapters</span>
+										</div>
+									{:else}
+										<div class="flex items-center gap-1">
+											<BookOpen class="w-3 h-3" />
+											<span>{resumption.readParagraphs}/{resumption.totalParagraphs} paragraphs</span>
+										</div>
+									{/if}
 								</div>
-								<div class="flex items-center gap-1">
-									<TrendingUp class="w-3 h-3" />
-									<span>{topic.mindMap.edgeCount}</span>
+								
+								<!-- Progress bar -->
+								{#if resumption.overallProgress > 0}
+									<div class="w-full bg-zinc-200 rounded-full h-1.5 mb-2">
+										<div 
+											class="h-1.5 rounded-full transition-all duration-300 {resumption.overallProgress === 100 ? 'bg-green-500' : 'bg-blue-500'}"
+											style="width: {resumption.overallProgress}%"
+										></div>
+									</div>
+								{/if}
+								
+								<!-- Status text -->
+								<div class="text-xs text-zinc-600">
+									{TopicResumptionService.getProgressDescription(resumption)}
+								</div>
+							{:else if topic.mindMap}
+								<!-- Legacy mind map stats -->
+								<div class="flex items-center gap-4 text-xs text-zinc-500">
+									<div class="flex items-center gap-1">
+										<Brain class="w-3 h-3" />
+										<span>{topic.mindMap.nodeCount} nodes</span>
+									</div>
+									<div class="flex items-center gap-1">
+										<TrendingUp class="w-3 h-3" />
+										<span>{topic.mindMap.edgeCount} connections</span>
+									</div>
 								</div>
 							{:else}
-								<div class="flex items-center gap-1">
+								<!-- No content yet -->
+								<div class="flex items-center gap-1 text-xs text-zinc-500">
 									<Clock class="w-3 h-3" />
 									<span>Not explored</span>
 								</div>
@@ -412,25 +564,58 @@
 						{/if}
 
 
-						<!-- Actions -->
+						<!-- Smart Actions -->
 						<div class="mt-auto flex gap-2">
-							{#if topic.mindMap}
+							{#if resumption?.hasExistingContent}
+								{#if resumption.hasProgress && resumption.overallProgress < 100}
+									<!-- Continue Reading - Primary action for topics with progress -->
+									<button
+										onclick={() => continueReading(topic.id)}
+										class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+									>
+										<PlayCircle class="h-3 w-3" />
+										Continue Reading
+									</button>
+								{:else if resumption.overallProgress === 100}
+									<!-- Completed topic -->
+									<button
+										onclick={() => viewTopicDetails(topic.id)}
+										class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-green-700 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
+									>
+										<CheckCircle class="h-3 w-3" />
+										Review
+									</button>
+								{:else}
+									<!-- No progress yet -->
+									<button
+										onclick={() => continueReading(topic.id)}
+										class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+									>
+										<BookOpen class="h-3 w-3" />
+										Start Reading
+									</button>
+								{/if}
+								
+								<!-- Mind Map option (secondary) -->
+								{#if topic.mindMap}
+									<button
+										onclick={() => resumeTopic(topic.id)}
+										class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-zinc-600 bg-zinc-50 rounded-md hover:bg-zinc-100 transition-colors"
+									>
+										<Brain class="h-3 w-3" />
+										Mind Map
+									</button>
+								{/if}
+							{:else}
+								<!-- Legacy actions for topics without chapter content -->
 								<button
 									onclick={() => resumeTopic(topic.id)}
 									class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
 								>
-									<RotateCcw class="h-3 w-3" />
-									Resume
+									<Brain class="h-3 w-3" />
+									Mindmap
 								</button>
 							{/if}
-							
-							<button
-								onclick={() => viewTopicDetails(topic.id)}
-								class="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-zinc-700 bg-zinc-100 rounded-md hover:bg-zinc-200 transition-colors"
-							>
-								<BookOpen class="h-3 w-3" />
-								Details
-							</button>
 						</div>
 					</div>
 				</article>
@@ -504,3 +689,11 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Topic Actions Modal -->
+<TopicActionsModal
+	bind:open={showActionsModal}
+	topic={selectedTopic}
+	onclose={handleCloseModal}
+	ondeleted={handleTopicDeleted}
+/>
